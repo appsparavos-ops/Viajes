@@ -28,7 +28,10 @@
                 <button onclick="nuevoViaje()" class="text-xs font-bold bg-amber-600 hover:bg-amber-500 px-3 py-1.5 rounded">➕ NUEVO VIAJE</button>
             </div>
         </div>
-        <div class="flex gap-2">
+        <div class="flex items-center gap-2">
+            <button onclick="SyncManager.sync()" id="btn-sync" class="text-sm bg-gray-600 hover:bg-gray-500 px-4 py-2 rounded-lg flex items-center gap-1 hidden">
+                <span>🔄 Sincronizar</span>
+            </button>
             <a href="presupuesto.html" target="_blank" class="text-sm bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg">💰 Presupuesto</a>
             <a href="viaje.html" target="_blank" class="text-sm bg-amber-600 hover:bg-amber-500 px-4 py-2 rounded-lg">Ver bitácora →</a>
         </div>
@@ -86,34 +89,56 @@
         </div>
 
         <div id="tab-finanzas" class="tab-content hidden space-y-6">
-            <div class="bg-white rounded-2xl shadow p-6 border-t-4 border-purple-500">
-                <h2 class="text-lg font-bold mb-2">👥 Configuración de Viajeros</h2>
-                <p class="text-xs text-gray-500 mb-3">Ingresá los nombres separados por coma para poder dividir los gastos.</p>
-                <div class="flex gap-2">
-                    <input type="text" id="c-viajeros" placeholder="Ej: Arturo, Juan, María" class="flex-1 border rounded-lg px-3 py-2 text-sm">
-                    <button onclick="guardarConfigViajeros()" class="px-6 bg-purple-600 text-white rounded-lg text-sm font-bold">Guardar</button>
-                </div>
+            <div class="flex justify-between items-center bg-white rounded-2xl shadow p-4 border-b-2 border-gray-100">
+                <h2 class="text-xl font-bold text-gray-800">Gestión de Gastos</h2>
+                <button onclick="document.getElementById('modal-config-viaje').classList.remove('hidden')" class="flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-bold transition">
+                    <span>⚙️ Configuración del Viaje</span>
+                </button>
             </div>
 
-            <div class="bg-white rounded-2xl shadow p-6 border-t-4 border-gray-400 flex items-center justify-between flex-wrap gap-3">
-                <div>
-                    <h2 class="text-lg font-bold">🗺️ Estado del Viaje</h2>
-                    <p class="text-xs text-gray-500">Viaje seleccionado: <span id="estado-viaje-titulo" class="font-bold">–</span> &bull; <span id="estado-viaje-badge" class="font-bold text-emerald-600">–</span></p>
-                </div>
-                <button onclick="toggleEstadoViaje()" id="btn-toggle-viaje" class="px-5 py-2 rounded-lg text-sm font-bold bg-red-100 text-red-700 hover:bg-red-200 transition">Finalizar Viaje ⛔</button>
-            </div>
+            <!-- Modal Configuración del Viaje -->
+            <div id="modal-config-viaje" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4">
+                <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto relative">
+                    <div class="sticky top-0 bg-white border-b border-gray-100 p-4 flex justify-between items-center z-10 rounded-t-2xl">
+                        <h2 class="text-xl font-bold">⚙️ Configuración del Viaje</h2>
+                        <button onclick="document.getElementById('modal-config-viaje').classList.add('hidden')" class="text-2xl text-gray-400 hover:text-gray-700">&times;</button>
+                    </div>
+                    <div class="p-6 space-y-6 bg-gray-50">
+                        <div class="bg-white rounded-2xl shadow-sm p-6 border-l-4 border-gray-400 flex items-center justify-between flex-wrap gap-3">
+                            <div>
+                                <h2 class="text-lg font-bold">🗺️ Estado del Viaje</h2>
+                                <p class="text-xs text-gray-500">Viaje seleccionado: <span id="estado-viaje-titulo" class="font-bold">–</span> &bull; <span id="estado-viaje-badge" class="font-bold text-emerald-600">–</span></p>
+                            </div>
+                            <button onclick="toggleEstadoViaje()" id="btn-toggle-viaje" class="px-5 py-2 rounded-lg text-sm font-bold bg-red-100 text-red-700 hover:bg-red-200 transition">Finalizar Viaje ⛔</button>
+                        </div>
 
-            <div class="bg-white rounded-2xl shadow p-6 border-t-4 border-amber-500">
-                <h2 class="text-lg font-bold mb-2">🎯 Presupuesto Estimado (en US$)</h2>
-                <p class="text-xs text-gray-500 mb-3">Definí metas de gasto para comparar luego con lo real.</p>
-                <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">
-                    <div><label class="text-xs">Combustible</label><input type="number" id="p-combustible" class="w-full border rounded px-2 py-1 text-sm"></div>
-                    <div><label class="text-xs">Hotelería</label><input type="number" id="p-hoteleria" class="w-full border rounded px-2 py-1 text-sm"></div>
-                    <div><label class="text-xs">Excursiones</label><input type="number" id="p-excursiones" class="w-full border rounded px-2 py-1 text-sm"></div>
-                    <div><label class="text-xs">Alimentación</label><input type="number" id="p-alimentacion" class="w-full border rounded px-2 py-1 text-sm"></div>
-                    <div><label class="text-xs">Otros</label><input type="number" id="p-otros" class="w-full border rounded px-2 py-1 text-sm"></div>
+                        <div class="bg-white rounded-2xl shadow-sm p-6 border-l-4 border-purple-500">
+                            <h2 class="text-lg font-bold mb-2">👥 Configuración de Viajeros</h2>
+                            <p class="text-xs text-gray-500 mb-3">Ingresá los nombres separados por coma para poder dividir los gastos.</p>
+                            <div class="flex gap-2">
+                                <input type="text" id="c-viajeros" placeholder="Ej: Arturo, Juan, María" class="flex-1 border rounded-lg px-3 py-2 text-sm">
+                                <button onclick="guardarConfigViajeros()" class="px-6 bg-purple-600 text-white rounded-lg text-sm font-bold">Guardar</button>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-2xl shadow-sm p-6 border-l-4 border-amber-500">
+                            <h2 class="text-lg font-bold mb-2">🎯 Presupuesto Estimado (en US$)</h2>
+                            <p class="text-xs text-gray-500 mb-3">Definí metas de gasto para comparar luego con lo real.</p>
+                            <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">
+                                <div><label class="text-xs">Combustible</label><input type="number" id="p-combustible" class="w-full border rounded px-2 py-1 text-sm"></div>
+                                <div><label class="text-xs">Hotelería</label><input type="number" id="p-hoteleria" class="w-full border rounded px-2 py-1 text-sm"></div>
+                                <div><label class="text-xs">Excursiones</label><input type="number" id="p-excursiones" class="w-full border rounded px-2 py-1 text-sm"></div>
+                                <div><label class="text-xs">Alimentación</label><input type="number" id="p-alimentacion" class="w-full border rounded px-2 py-1 text-sm"></div>
+                                <div><label class="text-xs">Otros</label><input type="number" id="p-otros" class="w-full border rounded px-2 py-1 text-sm"></div>
+                            </div>
+                            <button onclick="guardarPresupuestoEstimado()" class="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-bold">Guardar Metas</button>
+                        </div>
+                        
+                        <div class="text-center pt-2">
+                            <button onclick="document.getElementById('modal-config-viaje').classList.add('hidden')" class="px-8 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg text-sm font-bold transition">Cerrar Configuración</button>
+                        </div>
+                    </div>
                 </div>
-                <button onclick="guardarPresupuestoEstimado()" class="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-bold">Guardar Metas</button>
             </div>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -192,7 +217,112 @@
             return db.ref(`viajes_data/${currentViajeId}/${path}`);
         }
 
+        const SyncManager = {
+            queue: JSON.parse(localStorage.getItem('travelapp_syncQueue')) || [],
+            
+            saveQueue() {
+                localStorage.setItem('travelapp_syncQueue', JSON.stringify(this.queue));
+                this.updateUI();
+            },
+            
+            async save(path, action, data = null, isGlobal = false) {
+                if (navigator.onLine) {
+                    const ref = isGlobal ? db.ref(path) : getRef(path);
+                    if (action === 'push') {
+                        if (data && data.createdAt === "TIMESTAMP") data.createdAt = firebase.database.ServerValue.TIMESTAMP;
+                        const newRef = ref.push();
+                        await newRef.set(data);
+                        return newRef.key;
+                    } else if (action === 'update') {
+                        await ref.update(data);
+                    } else if (action === 'set') {
+                        await ref.set(data);
+                    } else if (action === 'remove') {
+                        await ref.remove();
+                    }
+                } else {
+                    let id = null;
+                    if (action === 'push') {
+                        id = db.ref().push().key; // Generar ID de firebase válido localmente
+                        path = path + '/' + id;
+                        action = 'set';
+                    }
+                    if (data && data.createdAt === "TIMESTAMP") data.createdAt = Date.now();
+                    
+                    this.queue.push({ id: Date.now(), path, action, data, isGlobal });
+                    this.saveQueue();
+                    toast('Guardado localmente (Modo Offline) 📴');
+                    return id;
+                }
+            },
+
+            updateUI() {
+                const btn = document.getElementById('btn-sync');
+                if (!btn) return;
+                if (this.queue.length > 0) {
+                    btn.classList.remove('hidden');
+                    btn.innerHTML = `<span>🔄 Sincronizar (${this.queue.length})</span>`;
+                    btn.classList.add('bg-red-600', 'animate-pulse');
+                    btn.classList.remove('bg-gray-600');
+                } else {
+                    if (navigator.onLine) {
+                        btn.classList.add('hidden');
+                    } else {
+                        btn.classList.remove('hidden');
+                        btn.innerHTML = `<span>📵 Offline</span>`;
+                        btn.classList.remove('bg-red-600', 'animate-pulse');
+                        btn.classList.add('bg-gray-600');
+                    }
+                }
+                
+                // Deshabilitar botón de Cloudinary si no hay internet
+                const btnUpload = document.getElementById('btn-upload');
+                if (btnUpload) {
+                    if (navigator.onLine) {
+                        btnUpload.disabled = false;
+                        btnUpload.classList.remove('opacity-50', 'cursor-not-allowed');
+                        btnUpload.textContent = '📷 Subir fotos a Cloudinary';
+                    } else {
+                        btnUpload.disabled = true;
+                        btnUpload.classList.add('opacity-50', 'cursor-not-allowed');
+                        btnUpload.textContent = '📷 Fotos (Requiere Internet)';
+                    }
+                }
+            },
+
+            async sync() {
+                if (!navigator.onLine) return toast('No hay conexión a internet.');
+                if (this.queue.length === 0) return toast('No hay elementos pendientes.');
+                
+                toast('Sincronizando...');
+                const btn = document.getElementById('btn-sync');
+                btn.innerHTML = `<span>⏳ Sincronizando...</span>`;
+                
+                try {
+                    for (let i = 0; i < this.queue.length; i++) {
+                        const op = this.queue[i];
+                        const ref = op.isGlobal ? db.ref(op.path) : getRef(op.path);
+                        if (op.action === 'set') await ref.set(op.data);
+                        if (op.action === 'update') await ref.update(op.data);
+                        if (op.action === 'remove') await ref.remove();
+                    }
+                    this.queue = [];
+                    this.saveQueue();
+                    toast('✅ Sincronización completa');
+                    setTimeout(() => window.location.reload(), 1000);
+                } catch (e) {
+                    console.error(e);
+                    toast('❌ Error al sincronizar.');
+                    this.updateUI();
+                }
+            }
+        };
+
+        window.addEventListener('online', () => SyncManager.updateUI());
+        window.addEventListener('offline', () => SyncManager.updateUI());
+
         async function initAdminGlobal() {
+            SyncManager.updateUI();
             const snap = await db.ref('viajes_index').once('value');
             const selector = document.getElementById('select-viaje');
             let viajes = [];
@@ -250,9 +380,9 @@
             // Si reactivamos, desactivar el resto
             if (!activo) {
                 const todos = await db.ref('viajes_index').once('value');
-                todos.forEach(c => { if(c.val().activo) db.ref('viajes_index/'+c.key).update({activo: false}); });
+                todos.forEach(async c => { if(c.val().activo) await SyncManager.save('viajes_index/'+c.key, 'update', {activo: false}, true); });
             }
-            await db.ref('viajes_index/' + currentViajeId).update({ activo: !activo });
+            await SyncManager.save('viajes_index/' + currentViajeId, 'update', { activo: !activo }, true);
             toast(activo ? 'Viaje finalizado ⛔' : 'Viaje reactivado ✅');
             await initAdminGlobal();
         }
@@ -263,12 +393,11 @@
             // Desmarcar otros activos
             const snap = await db.ref('viajes_index').once('value');
             if(snap.exists()){
-                snap.forEach(c => { if(c.val().activo) db.ref('viajes_index/'+c.key).update({activo:false}); });
+                snap.forEach(async c => { if(c.val().activo) await SyncManager.save('viajes_index/'+c.key, 'update', {activo:false}, true); });
             }
-            const ref = db.ref('viajes_index').push();
-            await ref.set({ titulo: titulo, activo: true, createdAt: firebase.database.ServerValue.TIMESTAMP });
+            const data = { titulo: titulo, activo: true, createdAt: "TIMESTAMP" };
+            currentViajeId = await SyncManager.save('viajes_index', 'push', data, true);
             toast('Viaje creado');
-            currentViajeId = ref.key;
             await initAdminGlobal();
         }
 
@@ -352,12 +481,12 @@
             
             try {
                 if (currentEditId) {
-                    await getRef('dias/' + currentEditId).update(data);
-                    toast('✅ Entrada actualizada');
+                    await SyncManager.save('dias/' + currentEditId, 'update', data);
+                    toast('✅ Entrada guardada');
                 } else { 
-                    data.createdAt = firebase.database.ServerValue.TIMESTAMP; 
-                    await getRef('dias').push(data); 
-                    toast('✅ Nuevo día creado');
+                    data.createdAt = "TIMESTAMP"; 
+                    await SyncManager.save('dias', 'push', data);
+                    toast('✅ Nuevo día guardado');
                 }
                 resetForm();
                 cargarEntradas(); // Refrescar lista automáticamente
@@ -394,9 +523,9 @@
             switchTab('tab-nueva');
         }
 
-        async function eliminarDia(id) { if(confirm('¿Seguro que querés borrar este día entero?')) { await getRef('dias/'+id).remove(); cargarEntradas(); } }
+        async function eliminarDia(id) { if(confirm('¿Seguro que querés borrar este día entero?')) { await SyncManager.save('dias/'+id, 'remove'); cargarEntradas(); } }
 
-        // COMENTARIOS Y FINANZAS SE MANTIENEN IGUAL...
+        // COMENTARIOS Y FINANZAS
         let filtroComentarios = 'pendientes';
         async function cargarComentarios(f) {
             if(f) filtroComentarios = f;
@@ -408,9 +537,9 @@
                 if(!c.aprobado) countPendientes++;
                 if((filtroComentarios==='pendientes' && !c.aprobado) || (filtroComentarios==='aprobados' && c.aprobado)) {
                     html += `<div class="p-3 border rounded mb-2 ${c.aprobado?'bg-green-50':'bg-red-50'}">${c.autor}: ${c.texto} <br>` +
-                        (!c.aprobado ? `<button onclick="getRef('comentarios/${c.id}').update({aprobado:true});toast('Aprobado');cargarComentarios();" class="text-green-600 font-bold mt-1">Aprobar</button>` : 
-                        `<button onclick="getRef('comentarios/${c.id}').update({aprobado:false});toast('Rechazado');cargarComentarios();" class="text-orange-600 font-bold mt-1 mr-3">Ocultar</button>`) +
-                        `<button onclick="getRef('comentarios/${c.id}').remove();cargarComentarios();" class="text-red-600 font-bold mt-1 ml-3">Borrar</button></div>`;
+                        (!c.aprobado ? `<button onclick="SyncManager.save('comentarios/${c.id}', 'update', {aprobado:true});toast('Aprobado');cargarComentarios();" class="text-green-600 font-bold mt-1">Aprobar</button>` : 
+                        `<button onclick="SyncManager.save('comentarios/${c.id}', 'update', {aprobado:false});toast('Oculto');cargarComentarios();" class="text-orange-600 font-bold mt-1 mr-3">Ocultar</button>`) +
+                        `<button onclick="SyncManager.save('comentarios/${c.id}', 'remove');cargarComentarios();" class="text-red-600 font-bold mt-1 ml-3">Borrar</button></div>`;
                 }
             });
             document.getElementById('lista-comentarios').innerHTML = html || '<p>No hay comentarios</p>';
@@ -460,7 +589,7 @@
                 Alimentacion: parseFloat(document.getElementById('p-alimentacion').value) || 0,
                 Otros: parseFloat(document.getElementById('p-otros').value) || 0
             };
-            await getRef('configuracion/presupuesto_estimado').set(data);
+            await SyncManager.save('configuracion/presupuesto_estimado', 'set', data);
             toast('Presupuesto estimado guardado');
         }
 
@@ -468,7 +597,7 @@
             const input = document.getElementById('c-viajeros').value;
             const lista = input.split(',').map(v => v.trim()).filter(v => v);
             if(lista.length === 0) return toast('Ingresá al menos un viajero');
-            await getRef('configuracion/viajeros').set(lista);
+            await SyncManager.save('configuracion/viajeros', 'set', lista);
             viajerosList = lista;
             actualizarUiViajeros();
             toast('Viajeros guardados');
@@ -497,8 +626,8 @@
             if(snap.exists()) { document.getElementById('c-tarjeta-ar-us').value = snap.val().ar_por_us; document.getElementById('c-tarjeta-uy-us').value = snap.val().uy_por_us; } 
             else { document.getElementById('c-tarjeta-ar-us').value = ''; document.getElementById('c-tarjeta-uy-us').value = ''; }
         }
-        async function guardarConfigEfectivo() { await getRef('configuracion/efectivo').set({ar_por_us: parseFloat(document.getElementById('c-efectivo-ar-us').value), uy_por_us: parseFloat(document.getElementById('c-efectivo-uy-us').value)}); toast('Guardado'); }
-        async function guardarCotizacionDiaria() { await getRef('cotizaciones/'+document.getElementById('c-tarjeta-fecha').value).set({ar_por_us: parseFloat(document.getElementById('c-tarjeta-ar-us').value), uy_por_us: parseFloat(document.getElementById('c-tarjeta-uy-us').value)}); toast('Guardado'); }
+        async function guardarConfigEfectivo() { await SyncManager.save('configuracion/efectivo', 'set', {ar_por_us: parseFloat(document.getElementById('c-efectivo-ar-us').value), uy_por_us: parseFloat(document.getElementById('c-efectivo-uy-us').value)}); toast('Guardado'); }
+        async function guardarCotizacionDiaria() { await SyncManager.save('cotizaciones/'+document.getElementById('c-tarjeta-fecha').value, 'set', {ar_por_us: parseFloat(document.getElementById('c-tarjeta-ar-us').value), uy_por_us: parseFloat(document.getElementById('c-tarjeta-uy-us').value)}); toast('Guardado'); }
         
         async function guardarGasto() {
             // Recolectar involucrados
@@ -514,11 +643,11 @@
                 detalle: document.getElementById('g-detalle').value,
                 pagador: document.getElementById('g-pagador').value || 'Sin asignar',
                 involucrados: involucrados.length > 0 ? involucrados : (viajerosList.length > 0 ? viajerosList : ['Sin asignar']),
-                timestamp: firebase.database.ServerValue.TIMESTAMP 
+                timestamp: "TIMESTAMP" 
             };
             
             if(!data.fecha || !data.monto) return toast('Faltan fecha o monto'); 
-            await getRef('gastos').push(data);
+            await SyncManager.save('gastos', 'push', data);
             document.getElementById('g-monto').value = ''; document.getElementById('g-detalle').value = ''; 
             toast('Guardado'); cargarUltimosGastos();
         }
@@ -536,7 +665,7 @@
                 </tr>
             `).join('');
         }
-        async function eliminarGasto(id) { if(confirm('¿Borrar?')) { await getRef('gastos/'+id).remove(); cargarUltimosGastos(); } }
+        async function eliminarGasto(id) { if(confirm('¿Borrar?')) { await SyncManager.save('gastos/'+id, 'remove'); cargarUltimosGastos(); } }
 
         function toast(m) { const e = document.getElementById('toast'); e.textContent=m; e.classList.remove('hidden'); setTimeout(()=>e.classList.add('hidden'),3000); }
         initCloudinaryWidget();
