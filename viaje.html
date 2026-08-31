@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bitácora de Viaje</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <!-- Playfair Display para los títulos estilo revista, Lato para el texto base -->
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,400;1,600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Lato', sans-serif; background-color: #fafaf9; }
+        h1, h2, h3, .font-serif { font-family: 'Playfair Display', serif; }
+        
+        #lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
+        #lightbox.active { display: flex; }
+        #lightbox img { max-width: 90vw; max-height: 90vh; object-fit: contain; }
+        
+        .spinner { border: 2px solid #e5e7eb; border-top: 2px solid #111827; border-radius: 50%; width: 36px; height: 36px; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        /* Efecto Letra Capital para el primer párrafo */
+        .editorial-text > p:first-of-type::first-letter {
+            font-family: 'Playfair Display', serif;
+            font-size: 5rem;
+            font-weight: 900;
+            line-height: 0.8;
+            float: left;
+            margin-right: 0.75rem;
+            margin-top: 0.25rem;
+            color: #111827;
+        }
+        .editorial-text p {
+            margin-bottom: 1.5rem;
+        }
+    </style>
+</head>
+<body class="text-gray-800 antialiased selection:bg-amber-200 selection:text-amber-900">
+
+    <!-- Masthead / Título de la Revista -->
+    <header class="bg-white py-16 px-4 border-b border-gray-200 shadow-sm relative overflow-hidden">
+        <div class="max-w-6xl mx-auto text-center relative z-10">
+            <p class="text-gray-400 text-xs font-bold uppercase tracking-[0.4em] mb-4">Diario de Ruta</p>
+            <h1 class="text-6xl md:text-[8rem] font-serif font-black text-gray-900 tracking-tighter uppercase leading-none">
+                Bitácora
+            </h1>
+            <div class="w-24 h-1 bg-amber-600 mx-auto mt-8 mb-6"></div>
+            <p id="subtitulo" class="text-gray-500 italic text-xl font-serif">Preparando el viaje...</p>
+            <div id="selector-viajes-container" class="mt-4 hidden">
+                <select id="select-viaje-publico" onchange="cambiarViajePublico(this.value)" class="bg-transparent border border-gray-300 text-gray-500 text-sm rounded px-3 py-1 font-serif focus:outline-none focus:border-gray-500 text-center text-center-last">
+                </select>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navegación pegajosa (Índice) -->
+    <nav class="bg-white/90 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50 transition-all shadow-sm">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="overflow-x-auto flex flex-1 gap-6 items-center font-serif text-sm italic text-gray-500 whitespace-nowrap hide-scrollbar" id="nav-dias">
+                Cargando el índice...
+            </div>
+            <button onclick="abrirGaleriaTotal()" class="ml-4 pl-4 border-l border-gray-300 text-xs font-bold text-gray-900 uppercase tracking-widest hover:text-amber-700 whitespace-nowrap flex items-center gap-1">
+                <span>📷 Galería</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Modal Galería Completa -->
+    <div id="modal-galeria" class="fixed inset-0 bg-white z-[60] hidden flex-col overflow-hidden">
+        <div class="flex items-center justify-between p-4 border-b border-gray-200">
+            <h2 id="modal-galeria-titulo" class="font-serif text-2xl font-black text-gray-900">Fotogalería</h2>
+            <button onclick="cerrarGaleriaTotal()" class="text-3xl text-gray-400 hover:text-gray-900 leading-none">&times;</button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-4 md:p-8">
+            <!-- Grilla masonry -->
+            <div id="galeria-masonry" class="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
+                <!-- Fotos se inyectan acá -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Contenedor Principal -->
+    <main class="w-full py-12" id="main-content">
+        <div class="flex justify-center py-20"><div class="spinner"></div></div>
+    </main>
+
+    <!-- Footer estilo editorial -->
+    <footer class="bg-gray-900 text-gray-400 py-12 text-center text-sm">
+        <p class="font-serif italic text-lg mb-2 text-gray-300">"El viaje no termina jamás. Solo los viajeros terminan."</p>
+        <p class="tracking-widest uppercase text-xs">Bitácora de Viaje &copy; <span id="year"></span></p>
+    </footer>
+
+    <!-- Lightbox -->
+    <div id="lightbox" onclick="closeLightbox()">
+        <button class="absolute top-6 right-8 text-white text-4xl hover:text-amber-400 transition" onclick="closeLightbox()">&times;</button>
+        <button class="absolute left-4 md:left-12 text-white text-5xl p-4 hover:text-amber-400 transition" onclick="event.stopPropagation(); changePhoto(-1)">&#8249;</button>
+        <img id="lightbox-img" src="" alt="Foto">
+        <button class="absolute right-4 md:right-12 text-white text-5xl p-4 hover:text-amber-400 transition" onclick="event.stopPropagation(); changePhoto(1)">&#8250;</button>
+        <p id="lightbox-caption" class="absolute bottom-8 text-white text-center w-full text-sm font-serif italic tracking-widest"></p>
+    </div>
+
+    <!-- Firebase Realtime DB SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="firebase-config.js"></script>
+
+    <script>
+        document.getElementById('year').textContent = new Date().getFullYear();
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        let currentViajeId = null;
+        
+        function getRef(path) {
+            return db.ref(`viajes_data/${currentViajeId}/${path}`);
+        }
+
+        async function initPublicApp() {
+            const snap = await db.ref('viajes_index').once('value');
+            if(!snap.exists()) {
+                document.getElementById('subtitulo').textContent = 'Próximamente...';
+                document.getElementById('nav-dias').innerHTML = '';
+                document.getElementById('main-content').innerHTML = '<p class="text-center text-gray-400 italic">No hay viajes publicados aún.</p>';
+                return;
+            }
+            
+            let viajes = [];
+            snap.forEach(c => { viajes.push({ id: c.key, ...c.val() }); });
+            viajes.sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlId = urlParams.get('id');
+            
+            if (urlId && viajes.find(v => v.id === urlId)) {
+                currentViajeId = urlId;
+            } else {
+                const activo = viajes.find(v => v.activo) || viajes[0];
+                currentViajeId = activo.id;
+            }
+
+            if (viajes.length > 1) {
+                const selector = document.getElementById('select-viaje-publico');
+                selector.innerHTML = viajes.map(v => `<option value="${v.id}" ${v.id === currentViajeId ? 'selected' : ''}>${v.titulo}</option>`).join('');
+                document.getElementById('selector-viajes-container').classList.remove('hidden');
+            }
+
+            cargarDias();
+        }
+
+        function cambiarViajePublico(id) {
+            window.location.href = `?id=${id}`;
+        }
+
+        let currentPhotos = [];
+        let currentPhotoIndex = 0;
+
+        function renderLightboxContent() {
+            const photo = currentPhotos[currentPhotoIndex];
+            const url = typeof photo === 'string' ? photo : photo.url;
+            const desc = typeof photo === 'string' ? '' : (photo.descripcion || '');
+            
+            document.getElementById('lightbox-img').src = url;
+            let captionText = `FOTO ${currentPhotoIndex + 1} DE ${currentPhotos.length}`;
+            if (desc) {
+                captionText = `<span class="block text-lg mb-1">${desc}</span>` + captionText;
+            }
+            document.getElementById('lightbox-caption').innerHTML = captionText;
+        }
+
+        function openLightbox(photos, index) {
+            currentPhotos = photos; currentPhotoIndex = index;
+            renderLightboxContent();
+            document.getElementById('lightbox').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+        function closeLightbox() { document.getElementById('lightbox').classList.remove('active'); document.body.style.overflow = ''; }
+        function changePhoto(dir) {
+            currentPhotoIndex = (currentPhotoIndex + dir + currentPhotos.length) % currentPhotos.length;
+            renderLightboxContent();
+        }
+        document.addEventListener('keydown', e => {
+            if (!document.getElementById('lightbox').classList.contains('active')) return;
+            if (e.key === 'Escape') closeLightbox();
+            if (e.key === 'ArrowRight') changePhoto(1);
+            if (e.key === 'ArrowLeft') changePhoto(-1);
+        });
+
+        let allTripPhotos = [];
+        let allTripDias = [];
+
+        async function cargarDias() {
+            const snap = await getRef('dias').orderByChild('numero').once('value');
+            const dias = [];
+            snap.forEach(child => { dias.push({ id: child.key, ...child.val() }); });
+            allTripDias = dias;
+
+            if (dias.length > 0) {
+                const primero = dias[0].destino || '';
+                const ultimo = dias[dias.length - 1].destino || '';
+                document.getElementById('subtitulo').textContent = primero === ultimo ? primero : `${primero} al ${ultimo}`;
+            } else {
+                document.getElementById('subtitulo').textContent = 'El cuaderno está en blanco...';
+            }
+
+            const nav = document.getElementById('nav-dias');
+            nav.innerHTML = dias.map(d => `<a href="#dia-${d.id}" class="hover:text-amber-700 transition">Día ${d.numero}</a>`).join('<span class="text-gray-300">/</span>');
+
+            const main = document.getElementById('main-content');
+            if (dias.length === 0) { main.innerHTML = `<div class="text-center text-gray-500 italic py-16 font-serif text-xl">Ningún día registrado aún.</div>`; return; }
+
+            const separator = `<div class="w-12 h-[1px] bg-gray-400 mx-auto my-24"></div>`;
+            main.innerHTML = dias.map((d, index) => renderDia(d, index)).join(separator);
+            
+            dias.forEach(d => cargarComentarios(d.id));
+            
+            // Build allTripPhotos
+            allTripPhotos = [];
+            dias.forEach(d => {
+                if (d.fotos && d.fotos.length > 0) {
+                    d.fotos.forEach(f => {
+                        const obj = typeof f === 'string' ? { url: f, descripcion: '' } : f;
+                        allTripPhotos.push({ ...obj, diaNumero: d.numero, diaDestino: d.destino });
+                    });
+                }
+            });
+        }
+        
+        function abrirGaleriaTotal(filtroDia = null) {
+            const container = document.getElementById('galeria-masonry');
+            const titulo = document.getElementById('modal-galeria-titulo');
+            
+            const fotosAMostrar = filtroDia ? allTripPhotos.filter(f => f.diaNumero === filtroDia) : allTripPhotos;
+            titulo.textContent = filtroDia ? `Fotos del Día ${filtroDia}` : `Fotogalería del Viaje`;
+            
+            if (fotosAMostrar.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 italic">No hay fotos para mostrar.</p>';
+            } else {
+                container.innerHTML = fotosAMostrar.map((f, i) => {
+                    const desc = f.descripcion ? `<p class="text-sm font-serif mt-2">${f.descripcion}</p>` : '';
+                    return `
+                    <div class="mb-4 break-inside-avoid relative group cursor-pointer" onclick="openLightbox(allTripPhotos, allTripPhotos.indexOf(fotosAMostrar[${i}]))">
+                        <img src="${f.url}" class="w-full rounded bg-gray-100 hover:opacity-90 transition">
+                        <div class="mt-1">
+                            ${!filtroDia ? `<span class="text-xs font-bold text-amber-700 uppercase">Día ${f.diaNumero} &bull; ${f.diaDestino}</span>` : ''}
+                            ${desc}
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+            
+            document.getElementById('modal-galeria').classList.remove('hidden');
+            document.getElementById('modal-galeria').classList.add('flex');
+            document.body.style.overflow = 'hidden';
+        }
+        
+        function cerrarGaleriaTotal() {
+            document.getElementById('modal-galeria').classList.add('hidden');
+            document.getElementById('modal-galeria').classList.remove('flex');
+            document.body.style.overflow = '';
+        }
+
+        function formatFecha(ts) {
+            if (!ts) return '';
+            const d = new Date(ts);
+            return d.toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
+        }
+
+        function procesarTexto(texto) {
+            // Convierte los saltos de línea en etiquetas <p> para aplicar el estilo editorial
+            if (!texto) return '';
+            return texto.split('\n').map(p => p.trim() ? `<p>${p}</p>` : '').join('');
+        }
+
+        function renderDia(d, index) {
+            const fotos = (d.fotos || []);
+            let mainPhotoHtml = '';
+            let galleryHtml = '';
+
+            if (fotos.length > 0) {
+                // Foto Hero (La primera)
+                const heroUrl = typeof fotos[0] === 'string' ? fotos[0] : fotos[0].url;
+                mainPhotoHtml = `
+                <div class="relative group overflow-hidden bg-gray-100 h-[500px] md:h-[700px] cursor-pointer" onclick="openLightbox(${JSON.stringify(fotos).replace(/"/g, '&quot;')}, 0)">
+                    <img src="${heroUrl}" alt="Foto principal día ${d.numero}" class="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105">
+                </div>`;
+                
+                // Resto de fotos en pequeña grilla
+                if (fotos.length > 1) {
+                    const restFotos = fotos.slice(1);
+                    galleryHtml = `
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-1 mt-1">
+                        ${restFotos.map((f, i) => {
+                            const u = typeof f === 'string' ? f : f.url;
+                            return `
+                            <div class="relative h-32 md:h-40 overflow-hidden cursor-pointer bg-gray-100 group" onclick="openLightbox(${JSON.stringify(fotos).replace(/"/g, '&quot;')}, ${i+1})">
+                                <img src="${u}" class="w-full h-full object-cover transition-all duration-500 group-hover:opacity-75 group-hover:scale-110">
+                            </div>`;
+                        }).join('')}
+                    </div>`;
+                }
+                
+                // Link a galería de ese día
+                galleryHtml += `
+                <div class="mt-4 text-right">
+                    <button onclick="abrirGaleriaTotal(${d.numero})" class="text-xs font-bold text-amber-700 uppercase tracking-widest hover:text-amber-900 transition flex items-center justify-end gap-2 ml-auto">
+                        <span>Ver todas las fotos del Día ${d.numero}</span> <span>&rarr;</span>
+                    </button>
+                </div>`;
+            }
+
+            // Alternar diseño par/impar para efecto revista
+            const isEven = index % 2 === 0;
+            const imgOrder = isEven ? 'md:order-1' : 'md:order-2';
+            const textOrder = isEven ? 'md:order-2' : 'md:order-1';
+            const textAlign = isEven ? 'md:text-left' : 'md:text-left'; // Podríamos alinear a la derecha, pero la lectura es mejor a la izquierda.
+
+            const title = d.titulo || d.destino;
+
+            return `
+            <article id="dia-${d.id}" class="scroll-mt-24 max-w-7xl mx-auto px-4">
+                
+                <!-- Título del día centrado o superior -->
+                <header class="text-center mb-12 max-w-3xl mx-auto">
+                    <p class="text-amber-700 font-bold uppercase tracking-[0.3em] text-xs mb-4">Día ${d.numero} &mdash; ${d.destino}</p>
+                    <h2 class="text-5xl md:text-6xl font-serif font-black text-gray-900 leading-tight tracking-tight mb-6">${title}</h2>
+                    <div class="flex items-center justify-center gap-4 text-gray-500 italic font-serif text-lg">
+                        <span>${formatFecha(d.fecha)}</span>
+                        ${d.recorrido ? `<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> <span>${d.recorrido}</span>` : ''}
+                    </div>
+                </header>
+
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-12 lg:gap-20 items-start">
+                    
+                    <!-- Columna de Imágenes -->
+                    <div class="md:col-span-7 lg:col-span-6 ${imgOrder}">
+                        ${mainPhotoHtml}
+                        ${galleryHtml}
+                    </div>
+
+                    <!-- Columna de Texto & Comentarios -->
+                    <div class="md:col-span-5 lg:col-span-6 ${textOrder}">
+                        
+                        <!-- Texto Editorial -->
+                        <div class="editorial-text text-lg text-gray-700 leading-relaxed font-serif text-justify md:text-left mb-16">
+                            ${procesarTexto(d.contenido)}
+                        </div>
+
+                        <!-- Sección Comentarios (Minimalista) -->
+                        <div class="border-t border-gray-200 pt-8 mt-12">
+                            <h4 class="text-xs font-bold text-gray-900 uppercase tracking-[0.2em] mb-8">Libro de visitas</h4>
+                            
+                            <div id="comentarios-${d.id}" class="space-y-6 mb-8">
+                                <p class="text-gray-400 text-sm italic font-serif">Cargando notas...</p>
+                            </div>
+                            
+                            <form onsubmit="enviarComentario(event, '${d.id}')" class="bg-white p-6 border border-gray-100 shadow-sm rounded-lg">
+                                <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Dejá tu firma</p>
+                                <input type="text" placeholder="Tu nombre" required maxlength="60" class="w-full bg-transparent border-b border-gray-300 py-2 text-sm focus:outline-none focus:border-amber-600 mb-4 transition-colors font-serif italic" id="nombre-${d.id}">
+                                <textarea placeholder="Escribí un mensaje..." required maxlength="800" rows="1" class="w-full bg-transparent border-b border-gray-300 py-2 text-sm focus:outline-none focus:border-amber-600 transition-colors font-serif resize-y mb-6" id="texto-${d.id}"></textarea>
+                                <button type="submit" class="w-full py-3 bg-gray-900 text-white text-xs font-bold uppercase tracking-widest hover:bg-amber-700 transition-colors">Publicar</button>
+                                <p id="msg-${d.id}" class="text-xs text-amber-600 italic text-center mt-3 font-serif"></p>
+                            </form>
+                        </div>
+
+                    </div>
+                </div>
+            </article>`;
+        }
+
+        async function cargarComentarios(diaId) {
+            const snap = await getRef('comentarios').orderByChild('diaId').equalTo(diaId).once('value');
+            const contenedor = document.getElementById(`comentarios-${diaId}`);
+            
+            const comentarios = [];
+            snap.forEach(c => {
+                const data = c.val();
+                if (data.aprobado) comentarios.push(data);
+            });
+            comentarios.sort((a,b) => (a.createdAt || 0) - (b.createdAt || 0));
+
+            if (comentarios.length === 0) {
+                contenedor.innerHTML = '<p class="text-gray-400 text-sm italic font-serif">Sin mensajes aún.</p>';
+                return;
+            }
+
+            contenedor.innerHTML = comentarios.map(c => `
+                <div class="mb-4">
+                    <p class="text-gray-800 font-serif italic leading-relaxed text-sm lg:text-base">"${c.texto}"</p>
+                    <p class="text-xs text-gray-400 uppercase tracking-widest mt-2">— ${c.autor}</p>
+                </div>`).join('');
+        }
+
+        async function enviarComentario(e, diaId) {
+            e.preventDefault();
+            const autor = document.getElementById(`nombre-${diaId}`).value.trim();
+            const texto = document.getElementById(`texto-${diaId}`).value.trim();
+            const msg = document.getElementById(`msg-${diaId}`);
+            if (!autor || !texto) return;
+
+            try {
+                await getRef('comentarios').push({
+                    diaId, autor, texto, aprobado: false,
+                    createdAt: firebase.database.ServerValue.TIMESTAMP
+                });
+                document.getElementById(`nombre-${diaId}`).value = '';
+                document.getElementById(`texto-${diaId}`).value = '';
+                msg.textContent = 'Recibido. Esperando aprobación del editor.';
+                setTimeout(() => msg.textContent = '', 5000);
+            } catch (err) {
+                msg.textContent = 'Hubo un error de conexión.';
+            }
+        }
+
+        initPublicApp();
+    </script>
+</body>
+</html>

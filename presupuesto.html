@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Presupuesto del Viaje</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>body { font-family: 'Lato', sans-serif; background-color: #f8fafc; }</style>
+</head>
+<body class="text-slate-800">
+    <header class="bg-slate-900 text-white py-6 shadow-md">
+        <div class="max-w-6xl mx-auto px-4 flex justify-between items-center flex-wrap gap-4">
+            <div class="flex items-center gap-4">
+                <h1 class="text-2xl font-bold">📊 Presupuesto</h1>
+                <select id="select-viaje-presupuesto" onchange="cambiarViajePresupuesto(this.value)" class="bg-slate-800 border border-slate-700 text-sm rounded px-3 py-1.5 text-white">
+                    <option value="">Cargando viajes...</option>
+                </select>
+            </div>
+            <a href="viaje-admin.html" class="text-sm text-slate-300 hover:text-white transition">← Volver al Admin</a>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 py-8">
+        <div class="flex justify-center mb-8">
+            <div class="bg-white rounded-lg p-1 border">
+                <button onclick="cambiarMonedaVer('UY$')" id="btn-uy" class="px-6 py-2 rounded-md font-bold bg-emerald-500 text-white shadow">Ver en UY$</button>
+                <button onclick="cambiarMonedaVer('US$')" id="btn-us" class="px-6 py-2 rounded-md font-bold text-slate-500 hover:bg-slate-100">Ver en US$</button>
+            </div>
+        </div>
+
+        <div id="loading" class="text-center py-12"><p>Calculando conversiones...</p></div>
+
+        <div id="dashboard" class="hidden">
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
+                <div class="bg-white rounded-2xl shadow-sm p-4 border"><p class="text-slate-500 text-xs uppercase tracking-wider">Planificado</p><h2 class="text-2xl font-bold text-amber-600" id="t-planificado">$0</h2></div>
+                <div class="bg-white rounded-2xl shadow-sm p-4 border"><p class="text-slate-500 text-xs uppercase tracking-wider">Total Gastado</p><h2 class="text-2xl font-bold" id="t-total">$0</h2></div>
+                <div class="bg-white rounded-2xl shadow-sm p-4 border"><p class="text-slate-500 text-xs uppercase tracking-wider">Sobrante</p><h2 class="text-2xl font-bold" id="t-sobrante">$0</h2></div>
+                <div class="bg-white rounded-2xl shadow-sm p-4 border"><p class="text-slate-500 text-xs uppercase tracking-wider">Pagado Tarjeta</p><h2 class="text-2xl font-bold text-blue-600" id="t-tarjeta">$0</h2></div>
+                <div class="bg-white rounded-2xl shadow-sm p-4 border"><p class="text-slate-500 text-xs uppercase tracking-wider">Pagado Efectivo</p><h2 class="text-2xl font-bold text-emerald-600" id="t-efectivo">$0</h2></div>
+            </div>
+
+            <div id="seccion-saldos" class="hidden mb-8">
+                <h3 class="text-xl font-bold mb-4">🤝 Saldos Compartidos</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4" id="contenedor-saldos">
+                    <!-- Cards de saldos se inyectan acá -->
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-sm p-6 border mb-8 hidden" id="seccion-barras-presupuesto">
+                <h3 class="text-xl font-bold mb-6">🎯 Ejecución de Presupuesto por Categoría</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6" id="contenedor-barras-presupuesto">
+                    <!-- Barras se inyectan acá -->
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+                <div class="bg-white rounded-2xl p-6 border lg:col-span-1"><canvas id="chartCategorias" height="250"></canvas></div>
+                
+                <div class="bg-white rounded-2xl border lg:col-span-2 overflow-hidden flex flex-col">
+                    <div class="overflow-x-auto flex-1">
+                        <table class="w-full text-sm text-left whitespace-nowrap">
+                            <thead class="text-xs text-slate-500 bg-slate-100 uppercase">
+                                <tr><th class="px-6 py-3">Fecha</th><th class="px-6 py-3">Categoría</th><th class="px-6 py-3">Original</th><th class="px-6 py-3">Método & Tasa</th><th class="px-6 py-3 text-right">Costo Calculado</th></tr>
+                            </thead>
+                            <tbody id="lista-presupuesto" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="alerta-faltantes" class="bg-orange-50 border-l-4 border-orange-500 p-4 rounded text-sm text-orange-800 hidden mb-8">
+                <strong>⚠️ Atención:</strong> Faltan cotizaciones diarias para algunos gastos con tarjeta.
+            </div>
+        </div>
+    </main>
+
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="firebase-config.js"></script>
+
+    <script>
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        let currentViajeId = null;
+        let monedaVisualizacion = 'UY$';
+        let datosCalculados = [];
+        let chartInstancia = null;
+        let viajerosList = [];
+        let metaPresupuesto = null;
+        let tasaEfectivoGlobal = { ar_por_us: 1, uy_por_us: 1 };
+
+        function getRef(path) {
+            return db.ref(`viajes_data/${currentViajeId}/${path}`);
+        }
+
+        async function initPresupuestoGlobal() {
+            const snap = await db.ref('viajes_index').once('value');
+            const selector = document.getElementById('select-viaje-presupuesto');
+            if (!snap.exists()) {
+                selector.innerHTML = '<option value="">(No hay viajes)</option>';
+                document.getElementById('loading').innerHTML = '<p class="text-red-500">No hay viajes creados. Creá uno en el Admin.</p>';
+                return;
+            }
+            let viajes = [];
+            snap.forEach(c => { viajes.push({ id: c.key, ...c.val() }); });
+            viajes.sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
+            selector.innerHTML = viajes.map(v => `<option value="${v.id}">${v.titulo} ${v.activo ? '✅' : ''}</option>`).join('');
+            const activo = viajes.find(v => v.activo) || viajes[0];
+            currentViajeId = activo.id;
+            selector.value = currentViajeId;
+            cargarDatos();
+        }
+
+        function cambiarViajePresupuesto(id) {
+            currentViajeId = id;
+            // Reset estado
+            datosCalculados = []; metaPresupuesto = null;
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('dashboard').classList.add('hidden');
+            cargarDatos();
+        }
+
+        function cambiarMonedaVer(moneda) {
+            monedaVisualizacion = moneda;
+            document.getElementById('btn-uy').className = moneda === 'UY$' ? 'px-6 py-2 rounded-md font-bold bg-emerald-500 text-white shadow' : 'px-6 py-2 rounded-md font-bold text-slate-500 hover:bg-slate-100';
+            document.getElementById('btn-us').className = moneda === 'US$' ? 'px-6 py-2 rounded-md font-bold bg-emerald-500 text-white shadow' : 'px-6 py-2 rounded-md font-bold text-slate-500 hover:bg-slate-100';
+            renderDashboard();
+        }
+
+        async function cargarDatos() {
+            try {
+                // Cargar viajeros
+                const vSnap = await getRef('configuracion/viajeros').once('value');
+                if (vSnap.exists()) viajerosList = vSnap.val();
+
+                // Cargar presupuesto
+                const pSnap = await getRef('configuracion/presupuesto_estimado').once('value');
+                if (pSnap.exists()) metaPresupuesto = pSnap.val();
+
+                const confSnap = await getRef('configuracion/efectivo').once('value');
+                tasaEfectivoGlobal = confSnap.exists() ? confSnap.val() : { ar_por_us: 1, uy_por_us: 1 };
+                
+                const cotizSnap = await getRef('cotizaciones').once('value');
+                const cotizacionesDias = {};
+                const arrayFechas = [];
+                cotizSnap.forEach(child => { cotizacionesDias[child.key] = child.val(); arrayFechas.push(child.key); });
+                arrayFechas.sort();
+
+                function obtenerTasaTarjeta(fechaGasto) {
+                    if (cotizacionesDias[fechaGasto]) return { tasa: cotizacionesDias[fechaGasto], exacta: true };
+                    const anteriores = arrayFechas.filter(f => f <= fechaGasto);
+                    if (anteriores.length > 0) return { tasa: cotizacionesDias[anteriores[anteriores.length - 1]], exacta: false };
+                    if (arrayFechas.length > 0) return { tasa: cotizacionesDias[arrayFechas[0]], exacta: false };
+                    return { tasa: { ar_por_us: 1, uy_por_us: 1 }, exacta: false };
+                }
+
+                const gastosSnap = await getRef('gastos').orderByChild('fecha').once('value');
+                const gastosBrutos = [];
+                gastosSnap.forEach(child => { gastosBrutos.push(child.val()); });
+                gastosBrutos.reverse();
+
+                let faltanTasas = false;
+
+                datosCalculados = gastosBrutos.map(g => {
+                    let valorUS = 0; let infoTasa = ""; let tasaUsada = null;
+
+                    if (g.metodo === 'Efectivo') {
+                        tasaUsada = tasaEfectivoGlobal; infoTasa = "Efectivo";
+                        if (g.moneda === 'AR$') valorUS = g.monto / tasaUsada.ar_por_us;
+                        else if (g.moneda === 'UY$') valorUS = g.monto / tasaUsada.uy_por_us;
+                        else if (g.moneda === 'US$') valorUS = g.monto;
+                    } else if (g.metodo === 'Tarjeta') {
+                        const { tasa, exacta } = obtenerTasaTarjeta(g.fecha);
+                        tasaUsada = tasa; if (!exacta) faltanTasas = true;
+                        infoTasa = `Tarjeta ${exacta ? '' : '(Aprox)'}`;
+                        if (g.moneda === 'AR$') valorUS = g.monto / tasaUsada.ar_por_us;
+                        else if (g.moneda === 'UY$') valorUS = g.monto / tasaUsada.uy_por_us;
+                        else if (g.moneda === 'US$') valorUS = g.monto;
+                    }
+                    let valorUY = valorUS * tasaUsada.uy_por_us;
+                    return { ...g, valorUS, valorUY, infoTasa };
+                });
+
+                if (faltanTasas) document.getElementById('alerta-faltantes').classList.remove('hidden');
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('dashboard').classList.remove('hidden');
+                renderDashboard();
+            } catch (err) { document.getElementById('loading').innerHTML = '<span class="text-red-500">Error cargando datos.</span>'; }
+        }
+
+        function renderDashboard() {
+            let total = 0, totalTarjeta = 0, totalEfectivo = 0;
+            const categoriasTotales = {};
+            const propValor = monedaVisualizacion === 'UY$' ? 'valorUY' : 'valorUS';
+            const fM = (num) => new Intl.NumberFormat('es-UY', { style: 'currency', currency: monedaVisualizacion==='US$'?'USD':'UYU', maximumFractionDigits: 0 }).format(num).replace('USD', 'US$').replace('UYU', 'UY$');
+            const tasaConversionMeta = monedaVisualizacion === 'UY$' ? tasaEfectivoGlobal.uy_por_us : 1;
+
+            let saldos = {};
+            viajerosList.forEach(v => saldos[v] = { pagado: 0, consumido: 0 });
+
+            document.getElementById('lista-presupuesto').innerHTML = datosCalculados.map(g => {
+                const val = g[propValor]; total += val;
+                if(g.metodo === 'Tarjeta') totalTarjeta += val; else totalEfectivo += val;
+                categoriasTotales[g.categoria] = (categoriasTotales[g.categoria] || 0) + val;
+                
+                // Cálculo de Saldos
+                let pagador = g.pagador && g.pagador !== 'Sin asignar' ? g.pagador : (viajerosList.length > 0 ? viajerosList[0] : null);
+                let involucrados = g.involucrados && g.involucrados.length > 0 && g.involucrados[0] !== 'Sin asignar' ? g.involucrados : (viajerosList.length > 0 ? viajerosList : []);
+                
+                if (pagador && involucrados.length > 0) {
+                    if(!saldos[pagador]) saldos[pagador] = { pagado: 0, consumido: 0 };
+                    involucrados.forEach(inv => { if(!saldos[inv]) saldos[inv] = { pagado: 0, consumido: 0 }; });
+                    
+                    saldos[pagador].pagado += val;
+                    const costoPersona = val / involucrados.length;
+                    involucrados.forEach(inv => saldos[inv].consumido += costoPersona);
+                }
+
+                return `<tr><td class="px-6 py-3">${g.fecha}</td><td class="px-6 py-3">${g.categoria}<br><span class="text-xs text-slate-500">${g.detalle}</span></td><td class="px-6 py-3">${g.moneda} ${g.monto}</td><td class="px-6 py-3 text-xs">${g.metodo}<br>Tasa: ${g.infoTasa}</td><td class="px-6 py-3 text-right font-bold">${fM(val)}<br><span class="text-[10px] font-normal text-slate-400 uppercase">${g.pagador && g.pagador !== 'Sin asignar' ? g.pagador : '-'}</span></td></tr>`;
+            }).join('');
+
+            // Renderizar Metas y Progreso
+            let totalPlanificado = 0;
+            if (metaPresupuesto) {
+                document.getElementById('seccion-barras-presupuesto').classList.remove('hidden');
+                const htmlBarras = [];
+                for (const cat of ['Combustible', 'Hoteleria', 'Excursiones', 'Alimentacion', 'Otros']) {
+                    const metaUS = parseFloat(metaPresupuesto[cat]) || 0;
+                    const meta = metaUS * tasaConversionMeta;
+                    totalPlanificado += meta;
+                    const gastado = categoriasTotales[cat] || 0;
+                    if (meta > 0 || gastado > 0) {
+                        const porcentaje = meta > 0 ? Math.min((gastado / meta) * 100, 100) : 100;
+                        const esExcedido = gastado > meta && meta > 0;
+                        const colorBarra = esExcedido ? 'bg-red-500' : 'bg-emerald-500';
+                        const sobrante = meta - gastado;
+                        
+                        htmlBarras.push(`
+                            <div class="mb-2">
+                                <div class="flex justify-between text-sm mb-1">
+                                    <span class="font-bold text-slate-700">${cat}</span>
+                                    <span class="text-slate-500">${fM(gastado)} de ${fM(meta)}</span>
+                                </div>
+                                <div class="w-full bg-slate-200 rounded-full h-2.5 mb-1 overflow-hidden">
+                                    <div class="${colorBarra} h-2.5 rounded-full transition-all duration-500" style="width: ${porcentaje}%"></div>
+                                </div>
+                                <p class="text-xs text-right ${esExcedido ? 'text-red-500 font-bold' : 'text-slate-400'}">
+                                    ${esExcedido ? 'Excedido por ' + fM(Math.abs(sobrante)) : 'Quedan ' + fM(sobrante)}
+                                </p>
+                            </div>
+                        `);
+                    }
+                }
+                document.getElementById('contenedor-barras-presupuesto').innerHTML = htmlBarras.join('') || '<p class="text-slate-400 text-sm">No hay metas definidas.</p>';
+            } else {
+                document.getElementById('seccion-barras-presupuesto').classList.add('hidden');
+            }
+
+            const sobranteTotal = totalPlanificado - total;
+            document.getElementById('t-planificado').textContent = totalPlanificado > 0 ? fM(totalPlanificado) : '-';
+            document.getElementById('t-total').textContent = fM(total);
+            document.getElementById('t-sobrante').textContent = totalPlanificado > 0 ? fM(sobranteTotal) : '-';
+            document.getElementById('t-sobrante').className = totalPlanificado === 0 ? 'text-2xl font-bold text-slate-400' : (sobranteTotal >= 0 ? 'text-2xl font-bold text-emerald-600' : 'text-2xl font-bold text-red-600');
+            document.getElementById('t-tarjeta').textContent = fM(totalTarjeta);
+            document.getElementById('t-efectivo').textContent = fM(totalEfectivo);
+
+            // Render Saldos
+            const secSaldos = document.getElementById('seccion-saldos');
+            const contSaldos = document.getElementById('contenedor-saldos');
+            const keysSaldos = Object.keys(saldos);
+            
+            if (keysSaldos.length > 0) {
+                secSaldos.classList.remove('hidden');
+                contSaldos.innerHTML = keysSaldos.map(v => {
+                    const { pagado, consumido } = saldos[v];
+                    const balance = pagado - consumido;
+                    let balanceColor = 'text-slate-500';
+                    let balanceTexto = 'Estás al día';
+                    if (balance > 0.01) { balanceColor = 'text-emerald-600'; balanceTexto = `Te deben ${fM(balance)}`; }
+                    if (balance < -0.01) { balanceColor = 'text-red-600'; balanceTexto = `Tenés que ${fM(Math.abs(balance))}`; } // Fixed phrase to sound natural
+                    
+                    return `<div class="bg-white rounded-xl shadow-sm p-4 border border-slate-200">
+                        <h4 class="font-bold text-lg border-b pb-2 mb-2">${v}</h4>
+                        <div class="flex justify-between text-xs text-slate-500 mb-1"><span>Pagó:</span> <span>${fM(pagado)}</span></div>
+                        <div class="flex justify-between text-xs text-slate-500 mb-3"><span>Consumió:</span> <span>${fM(consumido)}</span></div>
+                        <div class="text-center font-bold ${balanceColor} bg-slate-50 rounded py-2">${balanceTexto}</div>
+                    </div>`;
+                }).join('');
+            } else {
+                secSaldos.classList.add('hidden');
+            }
+
+            if(chartInstancia) chartInstancia.destroy();
+            chartInstancia = new Chart(document.getElementById('chartCategorias').getContext('2d'), {
+                type: 'doughnut',
+                data: { labels: Object.keys(categoriasTotales), datasets: [{ data: Object.values(categoriasTotales), backgroundColor: ['#f59e0b', '#3b82f6', '#10b981', '#ef4444', '#8b5cf6'] }] },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+        initPresupuestoGlobal();
+    </script>
+</body>
+</html>

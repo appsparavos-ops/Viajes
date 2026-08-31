@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin — Bitácora de Viaje</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+    <script src="https://widget.cloudinary.com/v2.0/global/all.js" type="text/javascript"></script>
+    <style>
+        body { font-family: 'Lato', sans-serif; }
+        .tab-btn.active { background-color: #d97706; color: white; }
+        .spinner { border: 3px solid #f3f4f6; border-top: 3px solid #d97706; border-radius: 50%; width: 28px; height: 28px; animation: spin 0.8s linear infinite; display: inline-block; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .foto-preview { position: relative; }
+        .foto-preview button { position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,0.6); color: white; border-radius: 50%; width: 22px; height: 22px; font-size: 14px; cursor: pointer; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen pb-12">
+
+    <header class="bg-amber-800 text-white py-4 px-6 shadow-md flex items-center justify-between flex-wrap gap-4">
+        <div>
+            <h1 class="text-xl font-bold">Bitácora de Viaje — Admin</h1>
+            <div class="flex items-center gap-2 mt-2">
+                <select id="select-viaje" class="bg-amber-900 border border-amber-700 text-sm rounded px-2 py-1 text-white" onchange="cambiarViaje(this.value)">
+                    <option value="">Cargando viajes...</option>
+                </select>
+                <button onclick="nuevoViaje()" class="text-xs font-bold bg-amber-600 hover:bg-amber-500 px-3 py-1.5 rounded">➕ NUEVO VIAJE</button>
+            </div>
+        </div>
+        <div class="flex gap-2">
+            <a href="presupuesto.html" target="_blank" class="text-sm bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg">💰 Presupuesto</a>
+            <a href="viaje.html" target="_blank" class="text-sm bg-amber-600 hover:bg-amber-500 px-4 py-2 rounded-lg">Ver bitácora →</a>
+        </div>
+    </header>
+
+    <div class="max-w-5xl mx-auto px-4 mt-6">
+        <div class="flex gap-2 mb-6 flex-wrap">
+            <button onclick="switchTab('tab-nueva')" id="btn-nueva" class="tab-btn active px-5 py-2 rounded-lg font-medium text-sm border border-amber-300">➕ Nueva entrada</button>
+            <button onclick="switchTab('tab-entradas')" id="btn-entradas" class="tab-btn px-5 py-2 rounded-lg font-medium text-sm border border-amber-300 bg-white text-gray-700">📓 Entradas</button>
+            <button onclick="switchTab('tab-comentarios')" id="btn-comentarios" class="tab-btn px-5 py-2 rounded-lg font-medium text-sm border border-amber-300 bg-white text-gray-700">💬 Comentarios <span id="badge-pendientes" class="ml-1 bg-red-500 text-white text-xs rounded-full px-2 py-0.5 hidden">0</span></button>
+            <button onclick="switchTab('tab-finanzas')" id="btn-finanzas" class="tab-btn px-5 py-2 rounded-lg font-medium text-sm border border-amber-300 bg-white text-gray-700">💵 Finanzas y Gastos</button>
+        </div>
+
+        <div id="tab-nueva" class="tab-content">
+            <div class="bg-white rounded-2xl shadow p-6">
+                <h2 class="text-lg font-bold text-gray-800 mb-5" id="form-titulo">Nueva entrada de día</h2>
+                
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                    <div><label class="block text-sm font-medium text-gray-700 mb-1">Número de día *</label><input type="number" id="f-numero" min="1" required class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+                    <div><label class="block text-sm font-medium text-gray-700 mb-1">Fecha *</label><input type="date" id="f-fecha" required class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+                    <div><label class="block text-sm font-medium text-gray-700 mb-1">Destino *</label><input type="text" id="f-destino" required class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+                </div>
+                <div class="mb-4"><label class="block text-sm font-medium text-gray-700 mb-1">Título</label><input type="text" id="f-titulo" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+                <div class="mb-4"><label class="block text-sm font-medium text-gray-700 mb-1">Recorrido</label><input type="text" id="f-recorrido" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+                <div class="mb-4"><label class="block text-sm font-medium text-gray-700 mb-1">Relato del día *</label><textarea id="f-contenido" rows="10" required class="w-full border rounded-lg px-3 py-2 text-sm"></textarea></div>
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Fotos</label>
+                    <div id="fotos-preview" class="flex flex-wrap gap-2 mb-3"></div>
+                    <button type="button" id="btn-upload" class="px-4 py-2 border-2 border-dashed border-amber-400 text-amber-700 rounded-lg text-sm">📷 Subir fotos a Cloudinary</button>
+                </div>
+                <div class="flex gap-3 items-center">
+                    <button onclick="guardarDia()" class="px-6 py-2 bg-amber-600 text-white font-semibold rounded-lg hover:bg-amber-700">Guardar entrada</button>
+                    <button onclick="resetForm()" class="px-4 py-2 border rounded-lg hover:bg-gray-100 text-sm">Limpiar formulario</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-entradas" class="tab-content hidden">
+            <div class="bg-white rounded-2xl shadow p-6" style="overflow:visible;">
+                <h2 class="text-lg font-bold text-gray-800 mb-4">Entradas publicadas</h2>
+                <div id="lista-entradas" style="overflow:visible; max-height:none;"><div class="flex justify-center py-8"><div class="spinner"></div></div></div>
+            </div>
+        </div>
+
+        <div id="tab-comentarios" class="tab-content hidden">
+            <!-- (Contenido de comentarios se mantiene igual) -->
+            <div class="bg-white rounded-2xl shadow p-6">
+                <h2 class="text-lg font-bold text-gray-800 mb-4">Moderación de comentarios</h2>
+                <div class="flex gap-3 mb-4">
+                    <button onclick="filtrarComentarios('pendientes')" class="px-4 py-1 text-sm bg-red-100 text-red-700 rounded-full">Pendientes</button>
+                    <button onclick="filtrarComentarios('aprobados')" class="px-4 py-1 text-sm bg-green-100 text-green-700 rounded-full">Aprobados</button>
+                </div>
+                <div id="lista-comentarios"><div class="flex justify-center py-8"><div class="spinner"></div></div></div>
+            </div>
+        </div>
+
+        <div id="tab-finanzas" class="tab-content hidden space-y-6">
+            <div class="bg-white rounded-2xl shadow p-6 border-t-4 border-purple-500">
+                <h2 class="text-lg font-bold mb-2">👥 Configuración de Viajeros</h2>
+                <p class="text-xs text-gray-500 mb-3">Ingresá los nombres separados por coma para poder dividir los gastos.</p>
+                <div class="flex gap-2">
+                    <input type="text" id="c-viajeros" placeholder="Ej: Arturo, Juan, María" class="flex-1 border rounded-lg px-3 py-2 text-sm">
+                    <button onclick="guardarConfigViajeros()" class="px-6 bg-purple-600 text-white rounded-lg text-sm font-bold">Guardar</button>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow p-6 border-t-4 border-gray-400 flex items-center justify-between flex-wrap gap-3">
+                <div>
+                    <h2 class="text-lg font-bold">🗺️ Estado del Viaje</h2>
+                    <p class="text-xs text-gray-500">Viaje seleccionado: <span id="estado-viaje-titulo" class="font-bold">–</span> &bull; <span id="estado-viaje-badge" class="font-bold text-emerald-600">–</span></p>
+                </div>
+                <button onclick="toggleEstadoViaje()" id="btn-toggle-viaje" class="px-5 py-2 rounded-lg text-sm font-bold bg-red-100 text-red-700 hover:bg-red-200 transition">Finalizar Viaje ⛔</button>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow p-6 border-t-4 border-amber-500">
+                <h2 class="text-lg font-bold mb-2">🎯 Presupuesto Estimado (en US$)</h2>
+                <p class="text-xs text-gray-500 mb-3">Definí metas de gasto para comparar luego con lo real.</p>
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">
+                    <div><label class="text-xs">Combustible</label><input type="number" id="p-combustible" class="w-full border rounded px-2 py-1 text-sm"></div>
+                    <div><label class="text-xs">Hotelería</label><input type="number" id="p-hoteleria" class="w-full border rounded px-2 py-1 text-sm"></div>
+                    <div><label class="text-xs">Excursiones</label><input type="number" id="p-excursiones" class="w-full border rounded px-2 py-1 text-sm"></div>
+                    <div><label class="text-xs">Alimentación</label><input type="number" id="p-alimentacion" class="w-full border rounded px-2 py-1 text-sm"></div>
+                    <div><label class="text-xs">Otros</label><input type="number" id="p-otros" class="w-full border rounded px-2 py-1 text-sm"></div>
+                </div>
+                <button onclick="guardarPresupuestoEstimado()" class="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-bold">Guardar Metas</button>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-white rounded-2xl shadow p-6 border-t-4 border-green-500">
+                    <h2 class="text-lg font-bold mb-2">💵 Billetera Efectivo</h2>
+                    <div class="space-y-3">
+                        <div><label class="text-sm">1 US$ = ... AR$</label><input type="number" step="0.01" id="c-efectivo-ar-us" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+                        <div><label class="text-sm">1 US$ = ... UY$</label><input type="number" step="0.01" id="c-efectivo-uy-us" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+                        <button onclick="guardarConfigEfectivo()" class="w-full py-2 bg-green-600 text-white rounded-lg">Guardar Tasas Efectivo</button>
+                    </div>
+                </div>
+                <div class="bg-white rounded-2xl shadow p-6 border-t-4 border-blue-500">
+                    <h2 class="text-lg font-bold mb-2">💳 Cotización Tarjeta</h2>
+                    <div class="space-y-3">
+                        <div><label class="text-sm">Fecha</label><input type="date" id="c-tarjeta-fecha" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+                        <div><label class="text-sm">Tasa: 1 US$ = ... AR$</label><input type="number" step="0.01" id="c-tarjeta-ar-us" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+                        <div><label class="text-sm">Tasa: 1 US$ = ... UY$</label><input type="number" step="0.01" id="c-tarjeta-uy-us" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+                        <button onclick="guardarCotizacionDiaria()" class="w-full py-2 bg-blue-600 text-white rounded-lg">Guardar Tasa Diaria</button>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-2xl shadow p-6">
+                <h2 class="text-lg font-bold mb-4">📝 Registrar Nuevo Gasto</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-5 gap-4 mb-4">
+                    <div><label class="text-sm">Fecha</label><input type="date" id="g-fecha" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+                    <div><label class="text-sm">Categoría</label><select id="g-categoria" class="w-full border rounded-lg px-3 py-2 text-sm"><option value="Combustible">Combustible</option><option value="Hoteleria">Hotelería</option><option value="Excursiones">Excursiones</option><option value="Alimentacion">Alimentación</option><option value="Otros">Otros</option></select></div>
+                    <div><label class="text-sm">Moneda</label><select id="g-moneda" class="w-full border rounded-lg px-3 py-2 text-sm"><option value="AR$">AR$</option><option value="US$">US$</option><option value="UY$">UY$</option></select></div>
+                    <div><label class="text-sm">Monto</label><input type="number" step="0.01" id="g-monto" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+                    <div><label class="text-sm">Método</label><select id="g-metodo" class="w-full border rounded-lg px-3 py-2 text-sm"><option value="Tarjeta">Tarjeta</option><option value="Efectivo">Efectivo</option></select></div>
+                </div>
+                <div class="mb-4"><label class="text-sm">Detalle</label><input type="text" id="g-detalle" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+                
+                <!-- Nueva sección para división de gastos -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 p-4 bg-gray-50 rounded-lg border">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">¿Quién pagó?</label>
+                        <select id="g-pagador" class="w-full border rounded-lg px-3 py-2 text-sm">
+                            <option value="">(Primero configurá los viajeros arriba)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">¿Para quiénes fue el gasto?</label>
+                        <div id="g-involucrados" class="flex flex-wrap gap-3 mt-1 text-sm">
+                            <span class="text-gray-400 italic">Configurá los viajeros primero</span>
+                        </div>
+                    </div>
+                </div>
+
+                <button onclick="guardarGasto()" class="px-6 py-2 bg-gray-800 text-white rounded-lg">Registrar Gasto</button>
+            </div>
+            <div class="bg-white rounded-2xl shadow p-6">
+                <h2 class="text-lg font-bold mb-4">Últimos Gastos</h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead><tr class="border-b text-gray-600"><th>Fecha</th><th>Cat.</th><th>Pagó</th><th>Monto</th><th></th></tr></thead>
+                        <tbody id="lista-gastos-admin"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-6 right-6 bg-gray-800 text-white px-5 py-3 rounded-xl hidden z-50 shadow-xl"></div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="firebase-config.js"></script>
+
+    <script>
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        let currentViajeId = null;
+        
+        function getRef(path) {
+            if (!currentViajeId) { toast('Error: Seleccioná un viaje'); throw new Error('No trip selected'); }
+            return db.ref(`viajes_data/${currentViajeId}/${path}`);
+        }
+
+        async function initAdminGlobal() {
+            const snap = await db.ref('viajes_index').once('value');
+            const selector = document.getElementById('select-viaje');
+            let viajes = [];
+            
+            if (snap.exists()) {
+                snap.forEach(c => { viajes.push({ id: c.key, ...c.val() }); });
+                viajes.sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
+                selector.innerHTML = viajes.map(v => `<option value="${v.id}">${v.titulo} ${v.activo ? '✅' : '⛔'}</option>`).join('');
+                
+                if (!currentViajeId || !viajes.find(v => v.id === currentViajeId)) {
+                    const activo = viajes.find(v => v.activo) || viajes[0];
+                    currentViajeId = activo.id;
+                    selector.value = currentViajeId;
+                } else {
+                    selector.value = currentViajeId;
+                }
+                
+                // Actualizar badge de estado
+                const viajeActual = viajes.find(v => v.id === currentViajeId);
+                if (viajeActual) {
+                    const titulo = document.getElementById('estado-viaje-titulo');
+                    const badge = document.getElementById('estado-viaje-badge');
+                    const btnToggle = document.getElementById('btn-toggle-viaje');
+                    if (titulo) titulo.textContent = viajeActual.titulo;
+                    if (badge) {
+                        badge.textContent = viajeActual.activo ? 'Activo ✅' : 'Finalizado ⛔';
+                        badge.className = `font-bold ${viajeActual.activo ? 'text-emerald-600' : 'text-red-500'}`;
+                    }
+                    if (btnToggle) {
+                        btnToggle.textContent = viajeActual.activo ? 'Finalizar Viaje ⛔' : 'Reactivar Viaje ✅';
+                        btnToggle.className = viajeActual.activo
+                            ? 'px-5 py-2 rounded-lg text-sm font-bold bg-red-100 text-red-700 hover:bg-red-200 transition'
+                            : 'px-5 py-2 rounded-lg text-sm font-bold bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition';
+                    }
+                }
+            } else {
+                selector.innerHTML = '<option value="">(No hay viajes)</option>';
+                currentViajeId = null;
+                document.getElementById('lista-entradas').innerHTML = '<p class="text-red-500 py-4">⚠️ Creá tu primer viaje arriba a la izquierda.</p>';
+            }
+            
+            if (currentViajeId) {
+                const activeTabBtn = document.querySelector('.tab-btn.active');
+                if(activeTabBtn) switchTab('tab-' + activeTabBtn.id.split('-')[1]);
+            }
+        }
+
+        async function toggleEstadoViaje() {
+            if (!currentViajeId) return;
+            const snap = await db.ref('viajes_index/' + currentViajeId).once('value');
+            if (!snap.exists()) return;
+            const activo = snap.val().activo;
+            const accion = activo ? 'finalizar' : 'reactivar';
+            if (!confirm(`¿Querés ${accion} este viaje?`)) return;
+            // Si reactivamos, desactivar el resto
+            if (!activo) {
+                const todos = await db.ref('viajes_index').once('value');
+                todos.forEach(c => { if(c.val().activo) db.ref('viajes_index/'+c.key).update({activo: false}); });
+            }
+            await db.ref('viajes_index/' + currentViajeId).update({ activo: !activo });
+            toast(activo ? 'Viaje finalizado ⛔' : 'Viaje reactivado ✅');
+            await initAdminGlobal();
+        }
+
+        async function nuevoViaje() {
+            const titulo = prompt("Título del viaje (ej: Sur 2024):");
+            if (!titulo) return;
+            // Desmarcar otros activos
+            const snap = await db.ref('viajes_index').once('value');
+            if(snap.exists()){
+                snap.forEach(c => { if(c.val().activo) db.ref('viajes_index/'+c.key).update({activo:false}); });
+            }
+            const ref = db.ref('viajes_index').push();
+            await ref.set({ titulo: titulo, activo: true, createdAt: firebase.database.ServerValue.TIMESTAMP });
+            toast('Viaje creado');
+            currentViajeId = ref.key;
+            await initAdminGlobal();
+        }
+
+        function cambiarViaje(id) {
+            currentViajeId = id;
+            initAdminGlobal();
+        }
+
+        let fotosUrls = [];
+        
+        // ESTADO ESTRICTO EN MEMORIA
+        let currentEditId = null;
+
+        function switchTab(id) {
+            ['tab-nueva','tab-entradas','tab-comentarios','tab-finanzas'].forEach(tab => {
+                document.getElementById(tab).classList.toggle('hidden', tab !== id);
+                document.getElementById('btn-' + tab.split('-')[1]).classList.toggle('active', tab === id);
+                document.getElementById('btn-' + tab.split('-')[1]).classList.toggle('bg-white', tab !== id);
+            });
+            if(id==='tab-entradas') cargarEntradas();
+            if(id==='tab-comentarios') cargarComentarios();
+            if(id==='tab-finanzas') initFinanzas();
+        }
+
+        let uploadWidget;
+        function initCloudinaryWidget() {
+            if (typeof cloudinary === 'undefined') { setTimeout(initCloudinaryWidget, 500); return; }
+            uploadWidget = cloudinary.createUploadWidget({ cloudName: CLOUDINARY_CLOUD_NAME, uploadPreset: CLOUDINARY_UPLOAD_PRESET, multiple: true }, (err, res) => {
+                if (!err && res && res.event === 'success') { 
+                    fotosUrls.push({ url: res.info.secure_url, descripcion: '' }); 
+                    renderFotosPreview(); 
+                }
+            });
+        }
+        document.getElementById('btn-upload').addEventListener('click', () => uploadWidget ? uploadWidget.open() : toast('Cargando...'));
+        
+        function renderFotosPreview() { 
+            const container = document.getElementById('fotos-preview');
+            container.innerHTML = fotosUrls.map((f, i) => {
+                // Compatibility for old format (string)
+                const url = typeof f === 'string' ? f : f.url;
+                const desc = typeof f === 'string' ? '' : (f.descripcion || '');
+                return `
+                <div class="foto-preview relative border rounded p-1 bg-gray-50 flex flex-col gap-1 w-32">
+                    <img src="${url}" class="w-full h-20 object-cover rounded">
+                    <input type="text" placeholder="Descripción..." value="${desc}" onchange="updateFotoDesc(${i}, this.value)" class="text-xs w-full p-1 border rounded">
+                    <button onclick="fotosUrls.splice(${i},1);renderFotosPreview()" class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow hover:bg-red-600">&times;</button>
+                </div>`;
+            }).join(''); 
+        }
+        
+        function updateFotoDesc(index, val) {
+            if (typeof fotosUrls[index] === 'string') {
+                fotosUrls[index] = { url: fotosUrls[index], descripcion: val };
+            } else {
+                fotosUrls[index].descripcion = val;
+            }
+        }
+
+        function resetForm() {
+            document.querySelectorAll('#tab-nueva input, #tab-nueva textarea').forEach(e => e.value='');
+            currentEditId = null; // LIMPIEZA ABSOLUTA DEL ID
+            fotosUrls=[]; 
+            renderFotosPreview();
+            document.getElementById('form-titulo').textContent = 'Nueva entrada de día';
+        }
+
+        // DIAS
+        async function guardarDia() {
+            const data = {
+                numero: parseInt(document.getElementById('f-numero').value),
+                fecha: new Date(document.getElementById('f-fecha').value + 'T12:00:00').getTime(),
+                destino: document.getElementById('f-destino').value,
+                titulo: document.getElementById('f-titulo').value,
+                recorrido: document.getElementById('f-recorrido').value,
+                contenido: document.getElementById('f-contenido').value,
+                fotos: fotosUrls
+            };
+            
+            if(!data.numero || !data.fecha || !data.destino) return toast('Faltan datos obligatorios');
+            
+            try {
+                if (currentEditId) {
+                    await getRef('dias/' + currentEditId).update(data);
+                    toast('✅ Entrada actualizada');
+                } else { 
+                    data.createdAt = firebase.database.ServerValue.TIMESTAMP; 
+                    await getRef('dias').push(data); 
+                    toast('✅ Nuevo día creado');
+                }
+                resetForm();
+                cargarEntradas(); // Refrescar lista automáticamente
+            } catch (err) {
+                toast('❌ Error: ' + err.message);
+            }
+        }
+
+        async function cargarEntradas() {
+            const snap = await getRef('dias').once('value');
+            const arr = [];
+            snap.forEach(c => { arr.push({id: c.key, ...c.val()}); });
+            arr.sort((a, b) => (a.numero || 0) - (b.numero || 0));
+            const html = arr.map(d => `<div class="flex justify-between items-center py-3 border-b"><span class="font-bold text-gray-800">Día ${d.numero} - ${d.destino}</span> <div><button onclick="editarDia('${d.id}')" class="text-blue-600 bg-blue-50 px-3 py-1 rounded-md text-sm font-bold mr-2 hover:bg-blue-100 transition">Editar</button><button onclick="eliminarDia('${d.id}')" class="text-red-600 bg-red-50 px-3 py-1 rounded-md text-sm font-bold hover:bg-red-100 transition">Borrar</button></div></div>`).join('');
+            document.getElementById('lista-entradas').innerHTML = html || '<p class="text-gray-400 italic py-4">No hay días registrados.</p>';
+        }
+
+        async function editarDia(id) {
+            const snap = await getRef('dias/' + id).once('value');
+            const d = snap.val();
+            
+            currentEditId = id; // ENGANCHE ESTRICTO EN MEMORIA
+            
+            document.getElementById('f-numero').value = d.numero;
+            document.getElementById('f-fecha').value = new Date(d.fecha).toISOString().split('T')[0];
+            document.getElementById('f-destino').value = d.destino;
+            document.getElementById('f-titulo').value = d.titulo || '';
+            document.getElementById('f-recorrido').value = d.recorrido || '';
+            document.getElementById('f-contenido').value = d.contenido;
+            fotosUrls = d.fotos || []; renderFotosPreview();
+            
+            document.getElementById('form-titulo').innerHTML = `✏️ Editando Día ${d.numero} <button onclick="resetForm()" class="ml-4 text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded-full shadow-sm hover:bg-red-200 transition">Cancelar edición (Crear nuevo)</button>`;
+            
+            switchTab('tab-nueva');
+        }
+
+        async function eliminarDia(id) { if(confirm('¿Seguro que querés borrar este día entero?')) { await getRef('dias/'+id).remove(); cargarEntradas(); } }
+
+        // COMENTARIOS Y FINANZAS SE MANTIENEN IGUAL...
+        let filtroComentarios = 'pendientes';
+        async function cargarComentarios(f) {
+            if(f) filtroComentarios = f;
+            const snap = await getRef('comentarios').once('value');
+            let todos = []; snap.forEach(c => { todos.push({id: c.key, ...c.val()}); });
+            todos.sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0)); 
+            let html = ''; let countPendientes = 0;
+            todos.forEach(c => {
+                if(!c.aprobado) countPendientes++;
+                if((filtroComentarios==='pendientes' && !c.aprobado) || (filtroComentarios==='aprobados' && c.aprobado)) {
+                    html += `<div class="p-3 border rounded mb-2 ${c.aprobado?'bg-green-50':'bg-red-50'}">${c.autor}: ${c.texto} <br>` +
+                        (!c.aprobado ? `<button onclick="getRef('comentarios/${c.id}').update({aprobado:true});toast('Aprobado');cargarComentarios();" class="text-green-600 font-bold mt-1">Aprobar</button>` : 
+                        `<button onclick="getRef('comentarios/${c.id}').update({aprobado:false});toast('Rechazado');cargarComentarios();" class="text-orange-600 font-bold mt-1 mr-3">Ocultar</button>`) +
+                        `<button onclick="getRef('comentarios/${c.id}').remove();cargarComentarios();" class="text-red-600 font-bold mt-1 ml-3">Borrar</button></div>`;
+                }
+            });
+            document.getElementById('lista-comentarios').innerHTML = html || '<p>No hay comentarios</p>';
+            const badge = document.getElementById('badge-pendientes');
+            badge.textContent = countPendientes; badge.classList.toggle('hidden', countPendientes === 0);
+        }
+        function filtrarComentarios(f) { cargarComentarios(f); }
+
+        let viajerosList = [];
+
+        async function initFinanzas() {
+            const hoy = new Date().toISOString().split('T')[0];
+            if(!document.getElementById('c-tarjeta-fecha').value) document.getElementById('c-tarjeta-fecha').value = hoy;
+            if(!document.getElementById('g-fecha').value) document.getElementById('g-fecha').value = hoy;
+            
+            // Cargar configuración de viajeros
+            const vSnap = await getRef('configuracion/viajeros').once('value');
+            if(vSnap.exists()) {
+                viajerosList = vSnap.val();
+                document.getElementById('c-viajeros').value = viajerosList.join(', ');
+                actualizarUiViajeros();
+            }
+
+            // Cargar presupuesto estimado
+            const pSnap = await getRef('configuracion/presupuesto_estimado').once('value');
+            if(pSnap.exists()) {
+                const p = pSnap.val();
+                document.getElementById('p-combustible').value = p.Combustible || '';
+                document.getElementById('p-hoteleria').value = p.Hoteleria || '';
+                document.getElementById('p-excursiones').value = p.Excursiones || '';
+                document.getElementById('p-alimentacion').value = p.Alimentacion || '';
+                document.getElementById('p-otros').value = p.Otros || '';
+            }
+
+            const cSnap = await getRef('configuracion/efectivo').once('value');
+            if(cSnap.exists()) {
+                document.getElementById('c-efectivo-ar-us').value = cSnap.val().ar_por_us; document.getElementById('c-efectivo-uy-us').value = cSnap.val().uy_por_us;
+            }
+            cargarCotizacionDiaria(document.getElementById('c-tarjeta-fecha').value); cargarUltimosGastos();
+        }
+
+        async function guardarPresupuestoEstimado() {
+            const data = {
+                Combustible: parseFloat(document.getElementById('p-combustible').value) || 0,
+                Hoteleria: parseFloat(document.getElementById('p-hoteleria').value) || 0,
+                Excursiones: parseFloat(document.getElementById('p-excursiones').value) || 0,
+                Alimentacion: parseFloat(document.getElementById('p-alimentacion').value) || 0,
+                Otros: parseFloat(document.getElementById('p-otros').value) || 0
+            };
+            await getRef('configuracion/presupuesto_estimado').set(data);
+            toast('Presupuesto estimado guardado');
+        }
+
+        async function guardarConfigViajeros() {
+            const input = document.getElementById('c-viajeros').value;
+            const lista = input.split(',').map(v => v.trim()).filter(v => v);
+            if(lista.length === 0) return toast('Ingresá al menos un viajero');
+            await getRef('configuracion/viajeros').set(lista);
+            viajerosList = lista;
+            actualizarUiViajeros();
+            toast('Viajeros guardados');
+        }
+
+        function actualizarUiViajeros() {
+            const selectPagador = document.getElementById('g-pagador');
+            const divInvolucrados = document.getElementById('g-involucrados');
+            if(viajerosList.length === 0) return;
+            
+            // Llenar select
+            selectPagador.innerHTML = viajerosList.map(v => `<option value="${v}">${v}</option>`).join('');
+            
+            // Llenar checkboxes (marcados por defecto)
+            divInvolucrados.innerHTML = viajerosList.map(v => `
+                <label class="flex items-center gap-1 cursor-pointer">
+                    <input type="checkbox" value="${v}" checked class="form-checkbox h-4 w-4 text-amber-600 rounded">
+                    <span>${v}</span>
+                </label>
+            `).join('');
+        }
+
+        document.getElementById('c-tarjeta-fecha').addEventListener('change', (e) => cargarCotizacionDiaria(e.target.value));
+        async function cargarCotizacionDiaria(fecha) {
+            const snap = await getRef('cotizaciones/' + fecha).once('value');
+            if(snap.exists()) { document.getElementById('c-tarjeta-ar-us').value = snap.val().ar_por_us; document.getElementById('c-tarjeta-uy-us').value = snap.val().uy_por_us; } 
+            else { document.getElementById('c-tarjeta-ar-us').value = ''; document.getElementById('c-tarjeta-uy-us').value = ''; }
+        }
+        async function guardarConfigEfectivo() { await getRef('configuracion/efectivo').set({ar_por_us: parseFloat(document.getElementById('c-efectivo-ar-us').value), uy_por_us: parseFloat(document.getElementById('c-efectivo-uy-us').value)}); toast('Guardado'); }
+        async function guardarCotizacionDiaria() { await getRef('cotizaciones/'+document.getElementById('c-tarjeta-fecha').value).set({ar_por_us: parseFloat(document.getElementById('c-tarjeta-ar-us').value), uy_por_us: parseFloat(document.getElementById('c-tarjeta-uy-us').value)}); toast('Guardado'); }
+        
+        async function guardarGasto() {
+            // Recolectar involucrados
+            const checkboxes = document.querySelectorAll('#g-involucrados input[type="checkbox"]:checked');
+            const involucrados = Array.from(checkboxes).map(cb => cb.value);
+            
+            const data = { 
+                fecha: document.getElementById('g-fecha').value, 
+                categoria: document.getElementById('g-categoria').value, 
+                moneda: document.getElementById('g-moneda').value, 
+                monto: parseFloat(document.getElementById('g-monto').value), 
+                metodo: document.getElementById('g-metodo').value, 
+                detalle: document.getElementById('g-detalle').value,
+                pagador: document.getElementById('g-pagador').value || 'Sin asignar',
+                involucrados: involucrados.length > 0 ? involucrados : (viajerosList.length > 0 ? viajerosList : ['Sin asignar']),
+                timestamp: firebase.database.ServerValue.TIMESTAMP 
+            };
+            
+            if(!data.fecha || !data.monto) return toast('Faltan fecha o monto'); 
+            await getRef('gastos').push(data);
+            document.getElementById('g-monto').value = ''; document.getElementById('g-detalle').value = ''; 
+            toast('Guardado'); cargarUltimosGastos();
+        }
+        
+        async function cargarUltimosGastos() {
+            const snap = await getRef('gastos').orderByChild('fecha').limitToLast(15).once('value');
+            const arr = []; snap.forEach(c => { arr.push({id: c.key, ...c.val()}); }); arr.reverse();
+            document.getElementById('lista-gastos-admin').innerHTML = arr.map(d => `
+                <tr class="border-b">
+                    <td class="py-2">${d.fecha}</td>
+                    <td>${d.categoria}</td>
+                    <td><span class="bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded font-bold">${d.pagador || 'N/A'}</span></td>
+                    <td>${d.moneda} ${d.monto} (${d.metodo})</td>
+                    <td><button onclick="eliminarGasto('${d.id}')" class="text-red-500 text-xs">Borrar</button></td>
+                </tr>
+            `).join('');
+        }
+        async function eliminarGasto(id) { if(confirm('¿Borrar?')) { await getRef('gastos/'+id).remove(); cargarUltimosGastos(); } }
+
+        function toast(m) { const e = document.getElementById('toast'); e.textContent=m; e.classList.remove('hidden'); setTimeout(()=>e.classList.add('hidden'),3000); }
+        initCloudinaryWidget();
+        
+        // Inicializar app
+        initAdminGlobal().then(() => {
+            if(currentViajeId) {
+                getRef('comentarios').once('value').then(snap => { let p=0; snap.forEach(c => {if(!c.val().aprobado) p++;}); document.getElementById('badge-pendientes').textContent = p; document.getElementById('badge-pendientes').classList.toggle('hidden', p===0); });
+            }
+        });
+    </script>
+</body>
+</html>
