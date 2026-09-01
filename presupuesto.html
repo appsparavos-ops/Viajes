@@ -22,6 +22,11 @@
         </div>
     </header>
 
+    <!-- Aviso de modo offline -->
+    <div id="banner-offline" class="hidden bg-yellow-100 border-b border-yellow-300 text-yellow-800 text-sm px-6 py-2 flex items-center gap-2">
+        📵 Sin conexión — Modo offline. Estás viendo la última copia guardada en el dispositivo.
+    </div>
+
     <main class="max-w-6xl mx-auto px-4 py-8">
         <div class="flex justify-center mb-8">
             <div class="bg-white rounded-lg p-1 border">
@@ -57,7 +62,7 @@
 
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
                 <div class="bg-white rounded-2xl p-6 border lg:col-span-1"><canvas id="chartCategorias" height="250"></canvas></div>
-                
+
                 <div class="bg-white rounded-2xl border lg:col-span-2 overflow-hidden flex flex-col">
                     <div class="overflow-x-auto flex-1">
                         <table class="w-full text-sm text-left whitespace-nowrap">
@@ -69,7 +74,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <div id="alerta-faltantes" class="bg-orange-50 border-l-4 border-orange-500 p-4 rounded text-sm text-orange-800 hidden mb-8">
                 <strong>⚠️ Atención:</strong> Faltan cotizaciones diarias para algunos gastos con tarjeta.
             </div>
@@ -81,8 +86,32 @@
     <script src="firebase-config.js"></script>
 
     <script>
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
+        /* ============================================================
+           Presupuesto del Viaje — con respaldo OFFLINE
+           ------------------------------------------------------------
+           - Todas las lecturas de Firebase tienen TIMEOUT: si el
+             servidor no responde, se usa la copia guardada en el
+             dispositivo (localStorage).
+           - Comparte la MISMA caché que el Admin
+             (viaje-admin-offline.html), así lo que descargás en una
+             pantalla queda disponible en la otra sin conexión.
+           ============================================================ */
+
+        const FIREBASE_AVAILABLE = typeof firebase !== 'undefined' && typeof firebaseConfig !== 'undefined';
+        let db = null;
+        if (FIREBASE_AVAILABLE) {
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.database();
+        }
+
+        const TIMEOUT_MS = 6000;
+
+        const CACHE = {
+            viajes: 'travelapp_viajes_cache',
+            lastViajeId: 'travelapp_last_viaje_id',
+            viajeData: id => 'travelapp_viajedata_' + id
+        };
+
         let currentViajeId = null;
         let monedaVisualizacion = 'UY$';
         let datosCalculados = [];
@@ -90,25 +119,94 @@
         let viajerosList = [];
         let metaPresupuesto = null;
         let tasaEfectivoGlobal = { ar_por_us: 1, uy_por_us: 1 };
+        // Tasa usada para convertir el presupuesto (que está definido en US$) a la moneda de vista.
+        // Se resuelve con una cadena de respaldo: efectivo configurado → última cotización → 1.
+        let tasaReferencia = { ar_por_us: 1, uy_por_us: 1 };
+
+        /* ---------------- Caché local (respaldo en el dispositivo) ---------------- */
+        function getCache(key) {
+            try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }
+            catch (e) { return null; }
+        }
+        function setCache(key, val) {
+            try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
+        }
+
+        function getViajeCache(id) {
+            if (!id) return { dias: [], gastos: [], comentarios: [], configuracion: {}, cotizaciones: {} };
+            const cache = getCache(CACHE.viajeData(id));
+            if (!cache) return { dias: [], gastos: [], comentarios: [], configuracion: {}, cotizaciones: {} };
+            return cache;
+        }
+        function setViajeCache(id, cache) { setCache(CACHE.viajeData(id), cache); }
+
+        function withTimeout(promise, ms = TIMEOUT_MS) {
+            return Promise.race([
+                promise,
+                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))
+            ]);
+        }
 
         function getRef(path) {
+            if (!db) throw new Error('Firebase no disponible');
             return db.ref(`viajes_data/${currentViajeId}/${path}`);
         }
 
+        // Lee un valor de Firebase con timeout. Si no responde o no existe,
+        // devuelve el valor de respaldo local.
+        async function leer(path, fallback) {
+            if (FIREBASE_AVAILABLE && navigator.onLine) {
+                try {
+                    const snap = await withTimeout(getRef(path).once('value'));
+                    if (snap.exists()) return { data: snap.val(), fromServer: true };
+                } catch (e) { /* cae al respaldo local */ }
+            }
+            return { data: fallback, fromServer: false };
+        }
+
+        function actualizarBannerOffline() {
+            const banner = document.getElementById('banner-offline');
+            if (banner) banner.classList.toggle('hidden', !!navigator.onLine);
+        }
+
+        /* ---------------- Carga inicial / selector de viajes ---------------- */
         async function initPresupuestoGlobal() {
-            const snap = await db.ref('viajes_index').once('value');
+            actualizarBannerOffline();
             const selector = document.getElementById('select-viaje-presupuesto');
-            if (!snap.exists()) {
+            let viajes = [];
+            let viaSource = 'online';
+
+            if (FIREBASE_AVAILABLE && navigator.onLine) {
+                try {
+                    const snap = await withTimeout(db.ref('viajes_index').once('value'));
+                    if (snap.exists()) {
+                        snap.forEach(c => viajes.push({ id: c.key, ...c.val() }));
+                        viajes.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+                        setCache(CACHE.viajes, viajes);
+                    }
+                } catch (e) {
+                    viaSource = 'cache';
+                    viajes = getCache(CACHE.viajes) || [];
+                }
+            } else {
+                viaSource = 'cache';
+                viajes = getCache(CACHE.viajes) || [];
+            }
+
+            if (viajes.length === 0) {
                 selector.innerHTML = '<option value="">(No hay viajes)</option>';
-                document.getElementById('loading').innerHTML = '<p class="text-red-500">No hay viajes creados. Creá uno en el Admin.</p>';
+                document.getElementById('loading').innerHTML =
+                    '<p class="text-red-500">No hay datos disponibles. Conectate una vez a internet para descargar la información del viaje.</p>';
                 return;
             }
-            let viajes = [];
-            snap.forEach(c => { viajes.push({ id: c.key, ...c.val() }); });
-            viajes.sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
-            selector.innerHTML = viajes.map(v => `<option value="${v.id}">${v.titulo} ${v.activo ? '✅' : ''}</option>`).join('');
+
+            selector.innerHTML = viajes.map(v =>
+                `<option value="${v.id}">${v.titulo} ${v.activo ? '✅' : ''}${viaSource === 'cache' ? ' (offline)' : ''}</option>`
+            ).join('');
+
+            const savedId = getCache(CACHE.lastViajeId);
             const activo = viajes.find(v => v.activo) || viajes[0];
-            currentViajeId = activo.id;
+            currentViajeId = (savedId && viajes.find(v => v.id === savedId)) ? savedId : activo.id;
             selector.value = currentViajeId;
             cargarDatos();
         }
@@ -131,35 +229,79 @@
 
         async function cargarDatos() {
             try {
-                // Cargar viajeros
-                const vSnap = await getRef('configuracion/viajeros').once('value');
-                if (vSnap.exists()) viajerosList = vSnap.val();
+                const cache = getViajeCache(currentViajeId);
+                cache.configuracion = cache.configuracion || {};
+                cache.cotizaciones = cache.cotizaciones || {};
 
-                // Cargar presupuesto
-                const pSnap = await getRef('configuracion/presupuesto_estimado').once('value');
-                if (pSnap.exists()) metaPresupuesto = pSnap.val();
+                // ── Viajeros ──
+                const vRes = await leer('configuracion/viajeros', cache.configuracion.viajeros || []);
+                viajerosList = vRes.data || [];
+                if (vRes.fromServer) cache.configuracion.viajeros = viajerosList;
 
-                const confSnap = await getRef('configuracion/efectivo').once('value');
-                tasaEfectivoGlobal = confSnap.exists() ? confSnap.val() : { ar_por_us: 1, uy_por_us: 1 };
-                
-                const cotizSnap = await getRef('cotizaciones').once('value');
-                const cotizacionesDias = {};
-                const arrayFechas = [];
-                cotizSnap.forEach(child => { cotizacionesDias[child.key] = child.val(); arrayFechas.push(child.key); });
-                arrayFechas.sort();
+                // ── Presupuesto (SIEMPRE está en US$) ──
+                const pRes = await leer('configuracion/presupuesto_estimado', cache.configuracion.presupuesto_estimado || null);
+                metaPresupuesto = pRes.data || null;
+                if (pRes.fromServer) cache.configuracion.presupuesto_estimado = metaPresupuesto;
+
+                // ── Tasa de efectivo ──
+                const eRes = await leer('configuracion/efectivo', cache.configuracion.efectivo || null);
+                tasaEfectivoGlobal = eRes.data || { ar_por_us: 1, uy_por_us: 1 };
+                if (eRes.fromServer) cache.configuracion.efectivo = tasaEfectivoGlobal;
+
+                setViajeCache(currentViajeId, cache);
+
+                // ── Cotizaciones diarias ──
+                let cotizacionesDias = cache.cotizaciones || {};
+                if (FIREBASE_AVAILABLE && navigator.onLine) {
+                    try {
+                        const cotizSnap = await withTimeout(getRef('cotizaciones').once('value'));
+                        if (cotizSnap.exists()) {
+                            cotizacionesDias = {};
+                            cotizSnap.forEach(child => { cotizacionesDias[child.key] = child.val(); });
+                            cache.cotizaciones = cotizacionesDias;
+                            setViajeCache(currentViajeId, cache);
+                        }
+                    } catch (e) { /* usa la caché */ }
+                }
+                const arrayFechas = Object.keys(cotizacionesDias).sort();
+
+                // ── Tasa de referencia ─────────────────────────────────────────
+                // El presupuesto está en US$. Para mostrarlo en UY$ necesitamos
+                // una tasa válida. Prioridad:
+                //   1) Tasa de efectivo configurada en el Admin.
+                //   2) Última cotización de tarjeta registrada.
+                //   3) 1 (sin conversión, si no hay ninguna tasa cargada).
+                const tasaEfectivoValida = tasaEfectivoGlobal
+                    && tasaEfectivoGlobal.ar_por_us > 0
+                    && tasaEfectivoGlobal.uy_por_us > 0;
+                tasaReferencia = tasaEfectivoValida
+                    ? tasaEfectivoGlobal
+                    : (arrayFechas.length > 0
+                        ? (cotizacionesDias[arrayFechas[arrayFechas.length - 1]] || { ar_por_us: 1, uy_por_us: 1 })
+                        : { ar_por_us: 1, uy_por_us: 1 });
 
                 function obtenerTasaTarjeta(fechaGasto) {
                     if (cotizacionesDias[fechaGasto]) return { tasa: cotizacionesDias[fechaGasto], exacta: true };
                     const anteriores = arrayFechas.filter(f => f <= fechaGasto);
                     if (anteriores.length > 0) return { tasa: cotizacionesDias[anteriores[anteriores.length - 1]], exacta: false };
                     if (arrayFechas.length > 0) return { tasa: cotizacionesDias[arrayFechas[0]], exacta: false };
-                    return { tasa: { ar_por_us: 1, uy_por_us: 1 }, exacta: false };
+                    return { tasa: tasaReferencia, exacta: false };
                 }
 
-                const gastosSnap = await getRef('gastos').orderByChild('fecha').once('value');
-                const gastosBrutos = [];
-                gastosSnap.forEach(child => { gastosBrutos.push(child.val()); });
-                gastosBrutos.reverse();
+                // ── Gastos ──
+                let gastosBrutos = cache.gastos || [];
+                if (FIREBASE_AVAILABLE && navigator.onLine) {
+                    try {
+                        const gastosSnap = await withTimeout(getRef('gastos').orderByChild('fecha').once('value'));
+                        if (gastosSnap.exists()) {
+                            gastosBrutos = [];
+                            gastosSnap.forEach(child => { gastosBrutos.push(child.val()); });
+                            cache.gastos = gastosBrutos;
+                            setViajeCache(currentViajeId, cache);
+                        }
+                    } catch (e) { /* usa la caché */ }
+                }
+                gastosBrutos = (gastosBrutos || []).slice().reverse();
 
                 let faltanTasas = false;
 
@@ -167,19 +309,28 @@
                     let valorUS = 0; let infoTasa = ""; let tasaUsada = null;
 
                     if (g.metodo === 'Efectivo') {
-                        tasaUsada = tasaEfectivoGlobal; infoTasa = "Efectivo";
-                        if (g.moneda === 'AR$') valorUS = g.monto / tasaUsada.ar_por_us;
-                        else if (g.moneda === 'UY$') valorUS = g.monto / tasaUsada.uy_por_us;
-                        else if (g.moneda === 'US$') valorUS = g.monto;
+                        // Si no hay tasa de efectivo configurada, usar la de referencia
+                        tasaUsada = tasaEfectivoValida ? tasaEfectivoGlobal : tasaReferencia;
+                        infoTasa = "Efectivo";
                     } else if (g.metodo === 'Tarjeta') {
                         const { tasa, exacta } = obtenerTasaTarjeta(g.fecha);
                         tasaUsada = tasa; if (!exacta) faltanTasas = true;
                         infoTasa = `Tarjeta ${exacta ? '' : '(Aprox)'}`;
-                        if (g.moneda === 'AR$') valorUS = g.monto / tasaUsada.ar_por_us;
-                        else if (g.moneda === 'UY$') valorUS = g.monto / tasaUsada.uy_por_us;
-                        else if (g.moneda === 'US$') valorUS = g.monto;
+                    } else {
+                        // Método desconocido/ausente: usar la tasa de referencia
+                        tasaUsada = tasaReferencia; infoTasa = "—";
                     }
-                    let valorUY = valorUS * tasaUsada.uy_por_us;
+
+                    // Evitar divisiones por 0 o valores NaN
+                    const tasaAr = tasaUsada && tasaUsada.ar_por_us > 0 ? tasaUsada.ar_por_us : 1;
+                    const tasaUy = tasaUsada && tasaUsada.uy_por_us > 0 ? tasaUsada.uy_por_us : 1;
+
+                    const monto = parseFloat(g.monto) || 0;
+                    if (g.moneda === 'AR$') valorUS = monto / tasaAr;
+                    else if (g.moneda === 'UY$') valorUS = monto / tasaUy;
+                    else valorUS = monto; // US$: el presupuesto está en US$
+
+                    let valorUY = valorUS * tasaUy;
                     return { ...g, valorUS, valorUY, infoTasa };
                 });
 
@@ -187,32 +338,43 @@
                 document.getElementById('loading').classList.add('hidden');
                 document.getElementById('dashboard').classList.remove('hidden');
                 renderDashboard();
-            } catch (err) { document.getElementById('loading').innerHTML = '<span class="text-red-500">Error cargando datos.</span>'; }
+            } catch (err) {
+                document.getElementById('loading').innerHTML = '<span class="text-red-500">Error cargando datos.</span>';
+            }
         }
 
         function renderDashboard() {
             let total = 0, totalTarjeta = 0, totalEfectivo = 0;
-            const categoriasTotales = {};
+            let totalUS = 0; // total real en US$ (para comparar con el presupuesto)
+            const categoriasTotales = {};     // en moneda de vista (gráfico)
+            const categoriasTotalesUS = {};   // en US$ (comparación con el presupuesto)
             const propValor = monedaVisualizacion === 'UY$' ? 'valorUY' : 'valorUS';
-            const fM = (num) => new Intl.NumberFormat('es-UY', { style: 'currency', currency: monedaVisualizacion==='US$'?'USD':'UYU', maximumFractionDigits: 0 }).format(num).replace('USD', 'US$').replace('UYU', 'UY$');
-            const tasaConversionMeta = monedaVisualizacion === 'UY$' ? tasaEfectivoGlobal.uy_por_us : 1;
+            // Formateador explícito: símbolo claro + separador de miles
+            const fM = (num) => {
+                const s = new Intl.NumberFormat('es-UY', { maximumFractionDigits: 0 }).format(Math.round(num || 0));
+                return (monedaVisualizacion === 'US$' ? 'US$ ' : 'UY$ ') + s;
+            };
+            // Tasa para convertir el presupuesto (US$) a la moneda de vista
+            const tasaVer = monedaVisualizacion === 'UY$' ? (tasaReferencia.uy_por_us > 0 ? tasaReferencia.uy_por_us : 1) : 1;
 
             let saldos = {};
             viajerosList.forEach(v => saldos[v] = { pagado: 0, consumido: 0 });
 
             document.getElementById('lista-presupuesto').innerHTML = datosCalculados.map(g => {
                 const val = g[propValor]; total += val;
+                totalUS += g.valorUS;
                 if(g.metodo === 'Tarjeta') totalTarjeta += val; else totalEfectivo += val;
                 categoriasTotales[g.categoria] = (categoriasTotales[g.categoria] || 0) + val;
-                
+                categoriasTotalesUS[g.categoria] = (categoriasTotalesUS[g.categoria] || 0) + g.valorUS;
+
                 // Cálculo de Saldos
                 let pagador = g.pagador && g.pagador !== 'Sin asignar' ? g.pagador : (viajerosList.length > 0 ? viajerosList[0] : null);
                 let involucrados = g.involucrados && g.involucrados.length > 0 && g.involucrados[0] !== 'Sin asignar' ? g.involucrados : (viajerosList.length > 0 ? viajerosList : []);
-                
+
                 if (pagador && involucrados.length > 0) {
                     if(!saldos[pagador]) saldos[pagador] = { pagado: 0, consumido: 0 };
                     involucrados.forEach(inv => { if(!saldos[inv]) saldos[inv] = { pagado: 0, consumido: 0 }; });
-                    
+
                     saldos[pagador].pagado += val;
                     const costoPersona = val / involucrados.length;
                     involucrados.forEach(inv => saldos[inv].consumido += costoPersona);
@@ -221,33 +383,39 @@
                 return `<tr><td class="px-6 py-3">${g.fecha}</td><td class="px-6 py-3">${g.categoria}<br><span class="text-xs text-slate-500">${g.detalle}</span></td><td class="px-6 py-3">${g.moneda} ${g.monto}</td><td class="px-6 py-3 text-xs">${g.metodo}<br>Tasa: ${g.infoTasa}</td><td class="px-6 py-3 text-right font-bold">${fM(val)}<br><span class="text-[10px] font-normal text-slate-400 uppercase">${g.pagador && g.pagador !== 'Sin asignar' ? g.pagador : '-'}</span></td></tr>`;
             }).join('');
 
-            // Renderizar Metas y Progreso
-            let totalPlanificado = 0;
+            // ── Metas y Progreso ────────────────────────────────────────────────
+            // La comparación se hace SIEMPRE en US$ (la moneda del presupuesto) y
+            // recién después se convierte a la moneda de visualización, para que
+            // "Excedido / Quedan" sea correcto en cualquier vista.
+            let totalPlanificadoUS = 0;
             if (metaPresupuesto) {
                 document.getElementById('seccion-barras-presupuesto').classList.remove('hidden');
                 const htmlBarras = [];
                 for (const cat of ['Combustible', 'Hoteleria', 'Excursiones', 'Alimentacion', 'Otros']) {
                     const metaUS = parseFloat(metaPresupuesto[cat]) || 0;
-                    const meta = metaUS * tasaConversionMeta;
-                    totalPlanificado += meta;
-                    const gastado = categoriasTotales[cat] || 0;
-                    if (meta > 0 || gastado > 0) {
-                        const porcentaje = meta > 0 ? Math.min((gastado / meta) * 100, 100) : 100;
-                        const esExcedido = gastado > meta && meta > 0;
+                    const gastadoUS = categoriasTotalesUS[cat] || 0;
+                    totalPlanificadoUS += metaUS;
+                    if (metaUS > 0 || gastadoUS > 0) {
+                        const esExcedido = gastadoUS > metaUS && metaUS > 0;
+                        const sobranteUS = metaUS - gastadoUS;
+                        const porcentaje = metaUS > 0 ? Math.min((gastadoUS / metaUS) * 100, 100) : 100;
                         const colorBarra = esExcedido ? 'bg-red-500' : 'bg-emerald-500';
-                        const sobrante = meta - gastado;
-                        
+                        // Valores para mostrar, en la moneda de vista
+                        const gastadoVer = gastadoUS * tasaVer;
+                        const metaVer = metaUS * tasaVer;
+                        const sobranteVer = sobranteUS * tasaVer;
+
                         htmlBarras.push(`
                             <div class="mb-2">
                                 <div class="flex justify-between text-sm mb-1">
                                     <span class="font-bold text-slate-700">${cat}</span>
-                                    <span class="text-slate-500">${fM(gastado)} de ${fM(meta)}</span>
+                                    <span class="text-slate-500">${fM(gastadoVer)} de ${fM(metaVer)}</span>
                                 </div>
                                 <div class="w-full bg-slate-200 rounded-full h-2.5 mb-1 overflow-hidden">
                                     <div class="${colorBarra} h-2.5 rounded-full transition-all duration-500" style="width: ${porcentaje}%"></div>
                                 </div>
                                 <p class="text-xs text-right ${esExcedido ? 'text-red-500 font-bold' : 'text-slate-400'}">
-                                    ${esExcedido ? 'Excedido por ' + fM(Math.abs(sobrante)) : 'Quedan ' + fM(sobrante)}
+                                    ${esExcedido ? 'Excedido por ' + fM(Math.abs(sobranteVer)) : 'Quedan ' + fM(sobranteVer)}
                                 </p>
                             </div>
                         `);
@@ -258,11 +426,13 @@
                 document.getElementById('seccion-barras-presupuesto').classList.add('hidden');
             }
 
-            const sobranteTotal = totalPlanificado - total;
-            document.getElementById('t-planificado').textContent = totalPlanificado > 0 ? fM(totalPlanificado) : '-';
+            const planificadoVer = totalPlanificadoUS * tasaVer;
+            const sobranteUS = totalPlanificadoUS - totalUS;
+            const sobranteVer = sobranteUS * tasaVer;
+            document.getElementById('t-planificado').textContent = totalPlanificadoUS > 0 ? fM(planificadoVer) : '-';
             document.getElementById('t-total').textContent = fM(total);
-            document.getElementById('t-sobrante').textContent = totalPlanificado > 0 ? fM(sobranteTotal) : '-';
-            document.getElementById('t-sobrante').className = totalPlanificado === 0 ? 'text-2xl font-bold text-slate-400' : (sobranteTotal >= 0 ? 'text-2xl font-bold text-emerald-600' : 'text-2xl font-bold text-red-600');
+            document.getElementById('t-sobrante').textContent = totalPlanificadoUS > 0 ? fM(sobranteVer) : '-';
+            document.getElementById('t-sobrante').className = totalPlanificadoUS === 0 ? 'text-2xl font-bold text-slate-400' : (sobranteUS >= 0 ? 'text-2xl font-bold text-emerald-600' : 'text-2xl font-bold text-red-600');
             document.getElementById('t-tarjeta').textContent = fM(totalTarjeta);
             document.getElementById('t-efectivo').textContent = fM(totalEfectivo);
 
@@ -270,7 +440,7 @@
             const secSaldos = document.getElementById('seccion-saldos');
             const contSaldos = document.getElementById('contenedor-saldos');
             const keysSaldos = Object.keys(saldos);
-            
+
             if (keysSaldos.length > 0) {
                 secSaldos.classList.remove('hidden');
                 contSaldos.innerHTML = keysSaldos.map(v => {
@@ -279,8 +449,8 @@
                     let balanceColor = 'text-slate-500';
                     let balanceTexto = 'Estás al día';
                     if (balance > 0.01) { balanceColor = 'text-emerald-600'; balanceTexto = `Te deben ${fM(balance)}`; }
-                    if (balance < -0.01) { balanceColor = 'text-red-600'; balanceTexto = `Tenés que ${fM(Math.abs(balance))}`; } // Fixed phrase to sound natural
-                    
+                    if (balance < -0.01) { balanceColor = 'text-red-600'; balanceTexto = `Tú Debes ${fM(Math.abs(balance))}`; }
+
                     return `<div class="bg-white rounded-xl shadow-sm p-4 border border-slate-200">
                         <h4 class="font-bold text-lg border-b pb-2 mb-2">${v}</h4>
                         <div class="flex justify-between text-xs text-slate-500 mb-1"><span>Pagó:</span> <span>${fM(pagado)}</span></div>
@@ -292,13 +462,24 @@
                 secSaldos.classList.add('hidden');
             }
 
-            if(chartInstancia) chartInstancia.destroy();
-            chartInstancia = new Chart(document.getElementById('chartCategorias').getContext('2d'), {
-                type: 'doughnut',
-                data: { labels: Object.keys(categoriasTotales), datasets: [{ data: Object.values(categoriasTotales), backgroundColor: ['#f59e0b', '#3b82f6', '#10b981', '#ef4444', '#8b5cf6'] }] },
-                options: { responsive: true, maintainAspectRatio: false }
-            });
+            // Gráfico (solo si Chart.js está disponible; sin internet la CDN no carga)
+            if (typeof Chart !== 'undefined') {
+                if (chartInstancia) chartInstancia.destroy();
+                chartInstancia = new Chart(document.getElementById('chartCategorias').getContext('2d'), {
+                    type: 'doughnut',
+                    data: { labels: Object.keys(categoriasTotales), datasets: [{ data: Object.values(categoriasTotales), backgroundColor: ['#f59e0b', '#3b82f6', '#10b981', '#ef4444', '#8b5cf6'] }] },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            }
         }
+
+        // Al recuperar la conexión, refrescar los datos automáticamente
+        window.addEventListener('online', () => {
+            actualizarBannerOffline();
+            if (currentViajeId) cargarDatos();
+        });
+        window.addEventListener('offline', () => actualizarBannerOffline());
+
         initPresupuestoGlobal();
     </script>
 </body>

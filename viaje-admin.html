@@ -37,6 +37,11 @@
         </div>
     </header>
 
+    <!-- Aviso de modo offline -->
+    <div id="banner-offline" class="hidden bg-yellow-100 border-b border-yellow-300 text-yellow-800 text-sm px-6 py-2 flex items-center gap-2">
+        📵 Sin conexión — Modo offline. Los cambios se guardan en el dispositivo y se sincronizarán automáticamente al volver a internet.
+    </div>
+
     <div class="max-w-5xl mx-auto px-4 mt-6">
         <div class="flex gap-2 mb-6 flex-wrap">
             <button onclick="switchTab('tab-nueva')" id="btn-nueva" class="tab-btn active px-5 py-2 rounded-lg font-medium text-sm border border-amber-300">➕ Nueva entrada</button>
@@ -48,7 +53,7 @@
         <div id="tab-nueva" class="tab-content">
             <div class="bg-white rounded-2xl shadow p-6">
                 <h2 class="text-lg font-bold text-gray-800 mb-5" id="form-titulo">Nueva entrada de día</h2>
-                
+
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                     <div><label class="block text-sm font-medium text-gray-700 mb-1">Número de día *</label><input type="number" id="f-numero" min="1" required class="w-full border rounded-lg px-3 py-2 text-sm"></div>
                     <div><label class="block text-sm font-medium text-gray-700 mb-1">Fecha *</label><input type="date" id="f-fecha" required class="w-full border rounded-lg px-3 py-2 text-sm"></div>
@@ -133,35 +138,43 @@
                             </div>
                             <button onclick="guardarPresupuestoEstimado()" class="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-bold">Guardar Metas</button>
                         </div>
-                        
+
                         <div class="text-center pt-2">
                             <button onclick="document.getElementById('modal-config-viaje').classList.add('hidden')" class="px-8 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg text-sm font-bold transition">Cerrar Configuración</button>
                         </div>
                     </div>
                 </div>
             </div>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="bg-white rounded-2xl shadow p-6 border-t-4 border-green-500">
-                    <h2 class="text-lg font-bold mb-2">💵 Billetera Efectivo</h2>
-                    <div class="space-y-3">
-                        <div><label class="text-sm">1 US$ = ... AR$</label><input type="number" step="0.01" id="c-efectivo-ar-us" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
-                        <div><label class="text-sm">1 US$ = ... UY$</label><input type="number" step="0.01" id="c-efectivo-uy-us" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
-                        <button onclick="guardarConfigEfectivo()" class="w-full py-2 bg-green-600 text-white rounded-lg">Guardar Tasas Efectivo</button>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div class="bg-white rounded-lg shadow-sm px-2.5 py-1.5 border-l-4 border-green-500">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-[11px] font-bold text-green-700 whitespace-nowrap">💵 Efectivo</span>
+                        <label class="text-[10px] text-gray-500 flex items-center gap-1">1 US$=AR$
+                            <input type="number" step="0.01" id="c-efectivo-ar-us" class="w-[4.5rem] border rounded px-1 py-0.5 text-[11px] leading-tight">
+                        </label>
+                        <label class="text-[10px] text-gray-500 flex items-center gap-1">1 US$=UY$
+                            <input type="number" step="0.01" id="c-efectivo-uy-us" class="w-[4.5rem] border rounded px-1 py-0.5 text-[11px] leading-tight">
+                        </label>
+                        <button onclick="guardarConfigEfectivo()" class="ml-auto px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-[10px] font-bold leading-tight">Guardar</button>
                     </div>
                 </div>
-                <div class="bg-white rounded-2xl shadow p-6 border-t-4 border-blue-500">
-                    <h2 class="text-lg font-bold mb-2">💳 Cotización Tarjeta</h2>
-                    <div class="space-y-3">
-                        <div><label class="text-sm">Fecha</label><input type="date" id="c-tarjeta-fecha" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
-                        <div><label class="text-sm">Tasa: 1 US$ = ... AR$</label><input type="number" step="0.01" id="c-tarjeta-ar-us" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
-                        <div><label class="text-sm">Tasa: 1 US$ = ... UY$</label><input type="number" step="0.01" id="c-tarjeta-uy-us" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
-                        <button onclick="guardarCotizacionDiaria()" class="w-full py-2 bg-blue-600 text-white rounded-lg">Guardar Tasa Diaria</button>
+                <div class="bg-white rounded-lg shadow-sm px-2.5 py-1.5 border-l-4 border-blue-500">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-[11px] font-bold text-blue-700 whitespace-nowrap">💳 Tarjeta</span>
+                        <input type="date" id="c-tarjeta-fecha" class="border rounded px-1 py-0.5 text-[11px] leading-tight w-[7.5rem]">
+                        <label class="text-[10px] text-gray-500 flex items-center gap-1">1 US$=AR$
+                            <input type="number" step="0.01" id="c-tarjeta-ar-us" class="w-[4.5rem] border rounded px-1 py-0.5 text-[11px] leading-tight">
+                        </label>
+                        <label class="text-[10px] text-gray-500 flex items-center gap-1">1 US$=UY$
+                            <input type="number" step="0.01" id="c-tarjeta-uy-us" class="w-[4.5rem] border rounded px-1 py-0.5 text-[11px] leading-tight">
+                        </label>
+                        <button onclick="guardarCotizacionDiaria()" class="ml-auto px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-bold leading-tight">Guardar</button>
                     </div>
                 </div>
             </div>
             <div class="bg-white rounded-2xl shadow p-6">
-                <h2 class="text-lg font-bold mb-4">📝 Registrar Nuevo Gasto</h2>
+                <h2 class="text-lg font-bold mb-4" id="gasto-form-titulo">📝 Registrar Nuevo Gasto</h2>
                 <div class="grid grid-cols-1 sm:grid-cols-5 gap-4 mb-4">
                     <div><label class="text-sm">Fecha</label><input type="date" id="g-fecha" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
                     <div><label class="text-sm">Categoría</label><select id="g-categoria" class="w-full border rounded-lg px-3 py-2 text-sm"><option value="Combustible">Combustible</option><option value="Hoteleria">Hotelería</option><option value="Excursiones">Excursiones</option><option value="Alimentacion">Alimentación</option><option value="Otros">Otros</option></select></div>
@@ -170,7 +183,7 @@
                     <div><label class="text-sm">Método</label><select id="g-metodo" class="w-full border rounded-lg px-3 py-2 text-sm"><option value="Tarjeta">Tarjeta</option><option value="Efectivo">Efectivo</option></select></div>
                 </div>
                 <div class="mb-4"><label class="text-sm">Detalle</label><input type="text" id="g-detalle" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
-                
+
                 <!-- Nueva sección para división de gastos -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 p-4 bg-gray-50 rounded-lg border">
                     <div>
@@ -187,13 +200,28 @@
                     </div>
                 </div>
 
-                <button onclick="guardarGasto()" class="px-6 py-2 bg-gray-800 text-white rounded-lg">Registrar Gasto</button>
+                <div class="flex items-center gap-3">
+                    <button onclick="guardarGasto()" id="btn-guardar-gasto" class="px-6 py-2 bg-gray-800 text-white rounded-lg">Registrar Gasto</button>
+                    <button onclick="resetGastoForm()" id="btn-cancelar-gasto" class="hidden px-4 py-2 border rounded-lg hover:bg-gray-100 text-sm">Cancelar edición</button>
+                </div>
             </div>
             <div class="bg-white rounded-2xl shadow p-6">
-                <h2 class="text-lg font-bold mb-4">Últimos Gastos</h2>
-                <div class="overflow-x-auto">
+                <div class="flex items-center justify-between mb-4 gap-2 flex-wrap">
+                    <h2 class="text-lg font-bold">Todos los Gastos <span id="gastos-count" class="text-sm font-normal text-gray-400"></span></h2>
+                </div>
+                <div class="overflow-x-auto max-h-[32rem] overflow-y-auto">
                     <table class="w-full text-sm text-left">
-                        <thead><tr class="border-b text-gray-600"><th>Fecha</th><th>Cat.</th><th>Pagó</th><th>Monto</th><th></th></tr></thead>
+                        <thead class="sticky top-0 bg-white">
+                            <tr class="border-b text-gray-600">
+                                <th class="py-2 pr-2">Fecha</th>
+                                <th class="pr-2">Cat.</th>
+                                <th class="pr-2">Detalle</th>
+                                <th class="pr-2">Pagó</th>
+                                <th class="pr-2">Para</th>
+                                <th class="pr-2">Monto</th>
+                                <th></th>
+                            </tr>
+                        </thead>
                         <tbody id="lista-gastos-admin"></tbody>
                     </table>
                 </div>
@@ -208,74 +236,250 @@
     <script src="firebase-config.js"></script>
 
     <script>
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
+        /* ============================================================
+           Bitácora de Viaje — Admin (con respaldo OFFLINE robusto)
+           ------------------------------------------------------------
+           Problema resuelto: cuando no hay internet real (aunque el
+           WebView diga "online"), Firebase quedaba esperando respuesta
+           y el título del viaje nunca cargaba, bloqueando relatos y
+           gastos.
+           Solución:
+            1. Todas las lecturas de Firebase tienen TIMEOUT; si el
+               servidor no responde, se usa la copia local del dispositivo.
+            2. Respaldo local (localStorage) de TODO lo importante:
+               viajes, días, gastos, configuración, cotizaciones y
+               comentarios.
+            3. Cola de sincronización: lo que se guarda sin internet se
+               sube automáticamente al volver la conexión.
+           ============================================================ */
+
+        const FIREBASE_AVAILABLE = typeof firebase !== 'undefined' && typeof firebaseConfig !== 'undefined';
+
+        let db = null;
+        if (FIREBASE_AVAILABLE) {
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.database();
+        }
+
         let currentViajeId = null;
-        
+
+        const TIMEOUT_MS = 6000; // segundos de espera máxima a Firebase
+
+        const CACHE = {
+            viajes: 'travelapp_viajes_cache',
+            lastViajeId: 'travelapp_last_viaje_id',
+            lastViaje: 'travelapp_last_viaje',
+            syncQueue: 'travelapp_syncQueue',
+            viajeData: id => 'travelapp_viajedata_' + id,
+            diasLegacy: id => 'travelapp_dias_' + id   // caché vieja, se migra automáticamente
+        };
+
+        /* ---------------- Utilidades ---------------- */
+        function getCache(key) {
+            try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }
+            catch (e) { return null; }
+        }
+        function setCache(key, val) {
+            try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
+        }
+        function deepClone(o) { return o == null ? o : JSON.parse(JSON.stringify(o)); }
+
+        // Genera un id único (estilo Firebase si está disponible, sino local)
+        function genId() {
+            if (FIREBASE_AVAILABLE) {
+                try { return db.ref().push().key; } catch (e) {}
+            }
+            return 'local_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
+        }
+
+        // Reemplaza el marcador "TIMESTAMP" por fecha local o por timestamp del servidor
+        function normalizeTimestamps(obj, mode) {
+            if (Array.isArray(obj)) { obj.forEach(o => normalizeTimestamps(o, mode)); return obj; }
+            if (obj && typeof obj === 'object') {
+                for (const k of Object.keys(obj)) {
+                    const v = obj[k];
+                    if (v === "TIMESTAMP") {
+                        obj[k] = (mode === 'server' && FIREBASE_AVAILABLE)
+                            ? firebase.database.ServerValue.TIMESTAMP
+                            : Date.now();
+                    } else if (v && typeof v === 'object') {
+                        normalizeTimestamps(v, mode);
+                    }
+                }
+            }
+            return obj;
+        }
+
+        // Cualquier promesa de Firebase se limita a TIMEOUT_MS
+        function withTimeout(promise, ms = TIMEOUT_MS) {
+            return Promise.race([
+                promise,
+                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))
+            ]);
+        }
+
         function getRef(path) {
             if (!currentViajeId) { toast('Error: Seleccioná un viaje'); throw new Error('No trip selected'); }
+            if (!db) throw new Error('Firebase no disponible');
             return db.ref(`viajes_data/${currentViajeId}/${path}`);
         }
 
+        /* ---------------- Caché por viaje (respaldo en el dispositivo) ---------------- */
+        function getViajeCache(id) {
+            if (!id) return { dias: [], gastos: [], comentarios: [], configuracion: {}, cotizaciones: {} };
+            let cache = getCache(CACHE.viajeData(id));
+            if (!cache) {
+                cache = { dias: [], gastos: [], comentarios: [], configuracion: {}, cotizaciones: {} };
+                const legacy = getCache(CACHE.diasLegacy(id)); // migrar caché antigua de días
+                if (legacy) cache.dias = legacy;
+            }
+            return cache;
+        }
+        function setViajeCache(id, cache) { setCache(CACHE.viajeData(id), cache); }
+
+        // Escribe un cambio en la caché local (write-through)
+        function applyToCache(path, action, data, viajeId) {
+            const cache = getViajeCache(viajeId);
+            const parts = path.split('/');
+            const collection = parts[0];
+            const id = parts[1] || null;
+            const cData = data == null ? null : normalizeTimestamps(deepClone(data), 'local');
+
+            if (collection === 'configuracion' || collection === 'cotizaciones') {
+                const bucket = cache[collection] = cache[collection] || {};
+                if (action === 'remove' && id) delete bucket[id];
+                else if (action === 'set' && id) bucket[id] = cData;
+                else if (action === 'update' && id) bucket[id] = { ...(bucket[id] || {}), ...cData };
+            } else {
+                let arr = cache[collection] || [];
+                if (action === 'remove' && id) {
+                    arr = arr.filter(x => x.id !== id);
+                } else if ((action === 'set' || action === 'update') && id) {
+                    const i = arr.findIndex(x => x.id === id);
+                    if (i >= 0) arr[i] = { ...arr[i], ...cData };
+                    else arr.push({ id, ...cData });
+                }
+                cache[collection] = arr;
+            }
+            setViajeCache(viajeId, cache);
+        }
+
+        // Sobreescribe una colección completa (cuando se lee del servidor)
+        function cacheCollection(viajeId, collection, arr) {
+            const cache = getViajeCache(viajeId);
+            cache[collection] = arr;
+            setViajeCache(viajeId, cache);
+        }
+
+        // Mezcla la cola pendiente en una lista, para ver los cambios sin conexión
+        function mergeQueued(arr, collection) {
+            const out = arr.slice();
+            (SyncManager.queue || []).forEach(op => {
+                if (op.viajeId !== currentViajeId) return;
+                const parts = op.path.split('/');
+                if (parts[0] !== collection) return;
+                const id = parts[1];
+                if (!id) return;
+                if (op.action === 'remove') {
+                    const i = out.findIndex(x => x.id === id);
+                    if (i >= 0) out.splice(i, 1);
+                } else {
+                    const d = normalizeTimestamps(deepClone(op.data), 'local');
+                    const i = out.findIndex(x => x.id === id);
+                    if (i >= 0) out[i] = { ...out[i], ...d };
+                    else out.push({ id, ...d });
+                }
+            });
+            return out;
+        }
+
+        /* ---------------- Cola de sincronización ---------------- */
         const SyncManager = {
-            queue: JSON.parse(localStorage.getItem('travelapp_syncQueue')) || [],
-            
+            queue: getCache(CACHE.syncQueue) || [],
+
             saveQueue() {
-                localStorage.setItem('travelapp_syncQueue', JSON.stringify(this.queue));
+                setCache(CACHE.syncQueue, this.queue);
                 this.updateUI();
             },
-            
+
+            // Guarda un dato. Si hay internet lo escribe directo; si no, lo encola.
             async save(path, action, data = null, isGlobal = false) {
-                if (navigator.onLine) {
-                    const ref = isGlobal ? db.ref(path) : getRef(path);
+                const viajeId = isGlobal ? null : currentViajeId;
+                let generatedId = null;
+                if (action === 'push') generatedId = genId(); // id estable para caché + firebase + cola
+
+                // 1) Write-through a la caché local (siempre hay respaldo)
+                if (!isGlobal && viajeId) {
                     if (action === 'push') {
-                        if (data && data.createdAt === "TIMESTAMP") data.createdAt = firebase.database.ServerValue.TIMESTAMP;
-                        const newRef = ref.push();
-                        await newRef.set(data);
-                        return newRef.key;
-                    } else if (action === 'update') {
-                        await ref.update(data);
-                    } else if (action === 'set') {
-                        await ref.set(data);
-                    } else if (action === 'remove') {
-                        await ref.remove();
+                        applyToCache(path + '/' + generatedId, 'set', data, viajeId);
+                    } else {
+                        applyToCache(path, action, data, viajeId);
                     }
-                } else {
-                    let id = null;
-                    if (action === 'push') {
-                        id = db.ref().push().key; // Generar ID de firebase válido localmente
-                        path = path + '/' + id;
-                        action = 'set';
-                    }
-                    if (data && data.createdAt === "TIMESTAMP") data.createdAt = Date.now();
-                    
-                    this.queue.push({ id: Date.now(), path, action, data, isGlobal });
-                    this.saveQueue();
-                    toast('Guardado localmente (Modo Offline) 📴');
-                    return id;
                 }
+
+                // 2) Intentar escribir en Firebase si hay conexión
+                let wrote = false;
+                if (FIREBASE_AVAILABLE && navigator.onLine) {
+                    try {
+                        const ref = isGlobal ? db.ref(path) : getRef(path);
+                        await withTimeout((async () => {
+                            if (action === 'push') {
+                                await ref.child(generatedId).set(normalizeTimestamps(deepClone(data), 'server'));
+                            } else if (action === 'update') {
+                                await ref.update(normalizeTimestamps(deepClone(data), 'server'));
+                            } else if (action === 'set') {
+                                await ref.set(normalizeTimestamps(deepClone(data), 'server'));
+                            } else if (action === 'remove') {
+                                await ref.remove();
+                            }
+                        })());
+                        wrote = true;
+                    } catch (e) {
+                        wrote = false; // sin respuesta del servidor → encolar
+                    }
+                }
+
+                // 3) Si no se pudo escribir online, encolar
+                if (!wrote) {
+                    const op = {
+                        id: Date.now(),
+                        path: action === 'push' ? path + '/' + (generatedId || genId()) : path,
+                        action: action === 'push' ? 'set' : action,
+                        data: data == null ? null : deepClone(data),
+                        isGlobal,
+                        viajeId
+                    };
+                    this.queue.push(op);
+                    this.saveQueue();
+                    if (navigator.onLine) toast('⚠️ Sin respuesta del servidor. Guardado localmente (se sincronizará).');
+                    else toast('Guardado localmente (Modo Offline) 📴');
+                } else {
+                    this.updateUI();
+                }
+
+                return generatedId;
             },
 
             updateUI() {
                 const btn = document.getElementById('btn-sync');
-                if (!btn) return;
-                if (this.queue.length > 0) {
-                    btn.classList.remove('hidden');
-                    btn.innerHTML = `<span>🔄 Sincronizar (${this.queue.length})</span>`;
-                    btn.classList.add('bg-red-600', 'animate-pulse');
-                    btn.classList.remove('bg-gray-600');
-                } else {
-                    if (navigator.onLine) {
-                        btn.classList.add('hidden');
-                    } else {
+                const banner = document.getElementById('banner-offline');
+                if (btn) {
+                    if (this.queue.length > 0) {
+                        btn.classList.remove('hidden');
+                        btn.innerHTML = `<span>🔄 Sincronizar (${this.queue.length})</span>`;
+                        btn.classList.add('bg-red-600', 'animate-pulse');
+                        btn.classList.remove('bg-gray-600');
+                    } else if (!navigator.onLine || !FIREBASE_AVAILABLE) {
                         btn.classList.remove('hidden');
                         btn.innerHTML = `<span>📵 Offline</span>`;
                         btn.classList.remove('bg-red-600', 'animate-pulse');
                         btn.classList.add('bg-gray-600');
+                    } else {
+                        btn.classList.add('hidden');
                     }
                 }
-                
-                // Deshabilitar botón de Cloudinary si no hay internet
+                if (banner) banner.classList.toggle('hidden', !!navigator.onLine);
+
                 const btnUpload = document.getElementById('btn-upload');
                 if (btnUpload) {
                     if (navigator.onLine) {
@@ -290,114 +494,196 @@
                 }
             },
 
-            async sync() {
-                if (!navigator.onLine) return toast('No hay conexión a internet.');
-                if (this.queue.length === 0) return toast('No hay elementos pendientes.');
-                
-                toast('Sincronizando...');
+            async sync(auto = false) {
+                if (!FIREBASE_AVAILABLE) { if (!auto) toast('Firebase no disponible. Reconectate y recargá la app para sincronizar.'); return; }
+                if (!navigator.onLine) { if (!auto) toast('No hay conexión a internet.'); return; }
+                if (this.queue.length === 0) { if (!auto) toast('No hay elementos pendientes.'); return; }
+
+                if (!auto) toast('Sincronizando...');
                 const btn = document.getElementById('btn-sync');
-                btn.innerHTML = `<span>⏳ Sincronizando...</span>`;
-                
+                if (btn) btn.innerHTML = `<span>⏳ Sincronizando...</span>`;
+
                 try {
                     for (let i = 0; i < this.queue.length; i++) {
                         const op = this.queue[i];
-                        const ref = op.isGlobal ? db.ref(op.path) : getRef(op.path);
-                        if (op.action === 'set') await ref.set(op.data);
-                        if (op.action === 'update') await ref.update(op.data);
-                        if (op.action === 'remove') await ref.remove();
+                        // El item guarda el viaje al que pertenece: no se mezclan viajes
+                        let ref = op.isGlobal ? db.ref(op.path) : db.ref(`viajes_data/${op.viajeId}/${op.path}`);
+                        if (op.action === 'set') await ref.set(normalizeTimestamps(deepClone(op.data), 'server'));
+                        else if (op.action === 'update') await ref.update(normalizeTimestamps(deepClone(op.data), 'server'));
+                        else if (op.action === 'remove') await ref.remove();
                     }
                     this.queue = [];
                     this.saveQueue();
-                    toast('✅ Sincronización completa');
-                    setTimeout(() => window.location.reload(), 1000);
+                    if (!auto) toast('✅ Sincronización completa');
+                    await initAdminGlobal(); // refrescar pantalla sin recargar
                 } catch (e) {
                     console.error(e);
-                    toast('❌ Error al sincronizar.');
+                    if (!auto) toast('❌ Error al sincronizar. Reintentá cuando haya conexión.');
                     this.updateUI();
                 }
             }
         };
 
-        window.addEventListener('online', () => SyncManager.updateUI());
+        window.addEventListener('online', () => { SyncManager.updateUI(); SyncManager.sync(true); });
         window.addEventListener('offline', () => SyncManager.updateUI());
 
+        /* ---------------- Carga inicial / selector de viajes ---------------- */
         async function initAdminGlobal() {
             SyncManager.updateUI();
-            const snap = await db.ref('viajes_index').once('value');
             const selector = document.getElementById('select-viaje');
             let viajes = [];
-            
-            if (snap.exists()) {
-                snap.forEach(c => { viajes.push({ id: c.key, ...c.val() }); });
-                viajes.sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
-                selector.innerHTML = viajes.map(v => `<option value="${v.id}">${v.titulo} ${v.activo ? '✅' : '⛔'}</option>`).join('');
-                
+            let viaSource = 'online';
+
+            // 1) Intentar leer de Firebase con timeout
+            if (FIREBASE_AVAILABLE && navigator.onLine) {
+                try {
+                    const snap = await withTimeout(db.ref('viajes_index').once('value'));
+                    if (snap.exists()) {
+                        snap.forEach(c => { viajes.push({ id: c.key, ...c.val() }); });
+                        viajes.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+                        setCache(CACHE.viajes, viajes);
+                    }
+                } catch (e) {
+                    viaSource = 'cache';
+                    viajes = getCache(CACHE.viajes) || [];
+                }
+            } else {
+                viaSource = 'cache';
+                viajes = getCache(CACHE.viajes) || [];
+            }
+
+            // 2) Último recurso: el último viaje recordado
+            if (viajes.length === 0) {
+                const last = getCache(CACHE.lastViaje);
+                if (last) viajes = [last];
+            }
+
+            // 3) Pintar selector y elegir viaje
+            if (viajes.length > 0) {
+                selector.innerHTML = viajes.map(v =>
+                    `<option value="${v.id}">${v.titulo} ${v.activo ? '✅' : '⛔'}${viaSource === 'cache' ? ' (offline)' : ''}</option>`
+                ).join('');
+
+                const savedId = getCache(CACHE.lastViajeId);
                 if (!currentViajeId || !viajes.find(v => v.id === currentViajeId)) {
-                    const activo = viajes.find(v => v.activo) || viajes[0];
-                    currentViajeId = activo.id;
-                    selector.value = currentViajeId;
-                } else {
-                    selector.value = currentViajeId;
+                    currentViajeId = (savedId && viajes.find(v => v.id === savedId))
+                        ? savedId
+                        : ((viajes.find(v => v.activo) || viajes[0])?.id || null);
                 }
-                
-                // Actualizar badge de estado
-                const viajeActual = viajes.find(v => v.id === currentViajeId);
-                if (viajeActual) {
-                    const titulo = document.getElementById('estado-viaje-titulo');
-                    const badge = document.getElementById('estado-viaje-badge');
-                    const btnToggle = document.getElementById('btn-toggle-viaje');
-                    if (titulo) titulo.textContent = viajeActual.titulo;
-                    if (badge) {
-                        badge.textContent = viajeActual.activo ? 'Activo ✅' : 'Finalizado ⛔';
-                        badge.className = `font-bold ${viajeActual.activo ? 'text-emerald-600' : 'text-red-500'}`;
-                    }
-                    if (btnToggle) {
-                        btnToggle.textContent = viajeActual.activo ? 'Finalizar Viaje ⛔' : 'Reactivar Viaje ✅';
-                        btnToggle.className = viajeActual.activo
-                            ? 'px-5 py-2 rounded-lg text-sm font-bold bg-red-100 text-red-700 hover:bg-red-200 transition'
-                            : 'px-5 py-2 rounded-lg text-sm font-bold bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition';
-                    }
-                }
+                selector.value = currentViajeId;
+                setCache(CACHE.lastViajeId, currentViajeId);
+                const sel = viajes.find(v => v.id === currentViajeId);
+                if (sel) setCache(CACHE.lastViaje, sel);
+                actualizarBadgeEstado(viajes);
             } else {
                 selector.innerHTML = '<option value="">(No hay viajes)</option>';
                 currentViajeId = null;
-                document.getElementById('lista-entradas').innerHTML = '<p class="text-red-500 py-4">⚠️ Creá tu primer viaje arriba a la izquierda.</p>';
+                document.getElementById('lista-entradas').innerHTML =
+                    '<p class="text-amber-600 py-4">⚠️ No hay viajes disponibles. Conectate una vez para descargar los datos, o creá un viaje nuevo con el botón ➕ NUEVO VIAJE.</p>';
             }
-            
+
             if (currentViajeId) {
                 const activeTabBtn = document.querySelector('.tab-btn.active');
-                if(activeTabBtn) switchTab('tab-' + activeTabBtn.id.split('-')[1]);
+                if (activeTabBtn) switchTab('tab-' + activeTabBtn.id.split('-')[1]);
             }
+        }
+
+        function actualizarBadgeEstado(viajes) {
+            const viajeActual = viajes.find(v => v.id === currentViajeId);
+            if (!viajeActual) return;
+            const titulo = document.getElementById('estado-viaje-titulo');
+            const badge = document.getElementById('estado-viaje-badge');
+            const btnToggle = document.getElementById('btn-toggle-viaje');
+            if (titulo) titulo.textContent = viajeActual.titulo;
+            if (badge) {
+                badge.textContent = viajeActual.activo ? 'Activo ✅' : 'Finalizado ⛔';
+                badge.className = `font-bold ${viajeActual.activo ? 'text-emerald-600' : 'text-red-500'}`;
+            }
+            if (btnToggle) {
+                btnToggle.textContent = viajeActual.activo ? 'Finalizar Viaje ⛔' : 'Reactivar Viaje ✅';
+                btnToggle.className = viajeActual.activo
+                    ? 'px-5 py-2 rounded-lg text-sm font-bold bg-red-100 text-red-700 hover:bg-red-200 transition'
+                    : 'px-5 py-2 rounded-lg text-sm font-bold bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition';
+            }
+        }
+
+        function updateViajesCache(viajeId, changes) {
+            let viajes = getCache(CACHE.viajes) || [];
+            const i = viajes.findIndex(v => v.id === viajeId);
+            if (i >= 0) viajes[i] = { ...viajes[i], ...changes };
+            else viajes.push({ id: viajeId, ...changes });
+            setCache(CACHE.viajes, viajes);
+            const last = getCache(CACHE.lastViaje);
+            if (last && last.id === viajeId) setCache(CACHE.lastViaje, { ...last, ...changes });
         }
 
         async function toggleEstadoViaje() {
             if (!currentViajeId) return;
-            const snap = await db.ref('viajes_index/' + currentViajeId).once('value');
-            if (!snap.exists()) return;
-            const activo = snap.val().activo;
+            const viajes = getCache(CACHE.viajes) || [];
+            const actual = viajes.find(v => v.id === currentViajeId);
+            if (!actual) return toast('No se encontró el viaje');
+            const activo = !!actual.activo;
             const accion = activo ? 'finalizar' : 'reactivar';
             if (!confirm(`¿Querés ${accion} este viaje?`)) return;
-            // Si reactivamos, desactivar el resto
-            if (!activo) {
-                const todos = await db.ref('viajes_index').once('value');
-                todos.forEach(async c => { if(c.val().activo) await SyncManager.save('viajes_index/'+c.key, 'update', {activo: false}, true); });
+
+            // Online
+            if (FIREBASE_AVAILABLE && navigator.onLine) {
+                try {
+                    const snap = await withTimeout(db.ref('viajes_index/' + currentViajeId).once('value'));
+                    const activoServer = snap.exists() ? snap.val().activo : activo;
+                    if (!activoServer) {
+                        const todos = await withTimeout(db.ref('viajes_index').once('value'));
+                        todos.forEach(c => { if (c.val().activo) SyncManager.save('viajes_index/' + c.key, 'update', { activo: false }, true); });
+                    }
+                    await SyncManager.save('viajes_index/' + currentViajeId, 'update', { activo: !activoServer }, true);
+                    updateViajesCache(currentViajeId, { activo: !activoServer });
+                    toast(activoServer ? 'Viaje finalizado ⛔' : 'Viaje reactivado ✅');
+                    await initAdminGlobal();
+                    return;
+                } catch (e) { /* cae al modo offline */ }
             }
-            await SyncManager.save('viajes_index/' + currentViajeId, 'update', { activo: !activo }, true);
-            toast(activo ? 'Viaje finalizado ⛔' : 'Viaje reactivado ✅');
+
+            // Offline: encolar y actualizar caché local
+            SyncManager.save('viajes_index/' + currentViajeId, 'update', { activo: !activo }, true);
+            updateViajesCache(currentViajeId, { activo: !activo });
+            toast(activo ? 'Viaje finalizado ⛔ (offline)' : 'Viaje reactivado ✅ (offline)');
             await initAdminGlobal();
         }
 
         async function nuevoViaje() {
             const titulo = prompt("Título del viaje (ej: Sur 2024):");
             if (!titulo) return;
-            // Desmarcar otros activos
-            const snap = await db.ref('viajes_index').once('value');
-            if(snap.exists()){
-                snap.forEach(async c => { if(c.val().activo) await SyncManager.save('viajes_index/'+c.key, 'update', {activo:false}, true); });
-            }
             const data = { titulo: titulo, activo: true, createdAt: "TIMESTAMP" };
-            currentViajeId = await SyncManager.save('viajes_index', 'push', data, true);
-            toast('Viaje creado');
+
+            // Online
+            if (FIREBASE_AVAILABLE && navigator.onLine) {
+                try {
+                    const snap = await withTimeout(db.ref('viajes_index').once('value'));
+                    if (snap.exists()) {
+                        snap.forEach(c => { if (c.val().activo) SyncManager.save('viajes_index/' + c.key, 'update', { activo: false }, true); });
+                    }
+                    const id = await SyncManager.save('viajes_index', 'push', data, true);
+                    if (id) {
+                        updateViajesCache(id, { id, ...normalizeTimestamps(deepClone(data), 'local') });
+                        currentViajeId = id;
+                        setCache(CACHE.lastViajeId, id);
+                        setCache(CACHE.lastViaje, { id, titulo, activo: true });
+                        toast('Viaje creado');
+                        await initAdminGlobal();
+                        return;
+                    }
+                } catch (e) { /* cae al modo offline */ }
+            }
+
+            // Offline: crear viaje local y encolar para cuando haya internet
+            const id = genId();
+            updateViajesCache(id, { id, ...normalizeTimestamps(deepClone(data), 'local') });
+            SyncManager.queue.push({ id: Date.now(), path: 'viajes_index/' + id, action: 'set', data: data, isGlobal: true, viajeId: null });
+            SyncManager.saveQueue();
+            currentViajeId = id;
+            setCache(CACHE.lastViajeId, id);
+            setCache(CACHE.lastViaje, { id, titulo, activo: true });
+            toast('Viaje creado (offline) 📴 — se sincronizará al conectar');
             await initAdminGlobal();
         }
 
@@ -407,7 +693,7 @@
         }
 
         let fotosUrls = [];
-        
+
         // ESTADO ESTRICTO EN MEMORIA
         let currentEditId = null;
 
@@ -417,27 +703,26 @@
                 document.getElementById('btn-' + tab.split('-')[1]).classList.toggle('active', tab === id);
                 document.getElementById('btn-' + tab.split('-')[1]).classList.toggle('bg-white', tab !== id);
             });
-            if(id==='tab-entradas') cargarEntradas();
-            if(id==='tab-comentarios') cargarComentarios();
-            if(id==='tab-finanzas') initFinanzas();
+            if (id === 'tab-entradas') cargarEntradas();
+            if (id === 'tab-comentarios') cargarComentarios();
+            if (id === 'tab-finanzas') initFinanzas();
         }
 
         let uploadWidget;
         function initCloudinaryWidget() {
             if (typeof cloudinary === 'undefined') { setTimeout(initCloudinaryWidget, 500); return; }
             uploadWidget = cloudinary.createUploadWidget({ cloudName: CLOUDINARY_CLOUD_NAME, uploadPreset: CLOUDINARY_UPLOAD_PRESET, multiple: true }, (err, res) => {
-                if (!err && res && res.event === 'success') { 
-                    fotosUrls.push({ url: res.info.secure_url, descripcion: '' }); 
-                    renderFotosPreview(); 
+                if (!err && res && res.event === 'success') {
+                    fotosUrls.push({ url: res.info.secure_url, descripcion: '' });
+                    renderFotosPreview();
                 }
             });
         }
         document.getElementById('btn-upload').addEventListener('click', () => uploadWidget ? uploadWidget.open() : toast('Cargando...'));
-        
-        function renderFotosPreview() { 
+
+        function renderFotosPreview() {
             const container = document.getElementById('fotos-preview');
             container.innerHTML = fotosUrls.map((f, i) => {
-                // Compatibility for old format (string)
                 const url = typeof f === 'string' ? f : f.url;
                 const desc = typeof f === 'string' ? '' : (f.descripcion || '');
                 return `
@@ -446,9 +731,9 @@
                     <input type="text" placeholder="Descripción..." value="${desc}" onchange="updateFotoDesc(${i}, this.value)" class="text-xs w-full p-1 border rounded">
                     <button onclick="fotosUrls.splice(${i},1);renderFotosPreview()" class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow hover:bg-red-600">&times;</button>
                 </div>`;
-            }).join(''); 
+            }).join('');
         }
-        
+
         function updateFotoDesc(index, val) {
             if (typeof fotosUrls[index] === 'string') {
                 fotosUrls[index] = { url: fotosUrls[index], descripcion: val };
@@ -458,14 +743,14 @@
         }
 
         function resetForm() {
-            document.querySelectorAll('#tab-nueva input, #tab-nueva textarea').forEach(e => e.value='');
+            document.querySelectorAll('#tab-nueva input, #tab-nueva textarea').forEach(e => e.value = '');
             currentEditId = null; // LIMPIEZA ABSOLUTA DEL ID
-            fotosUrls=[]; 
+            fotosUrls = [];
             renderFotosPreview();
             document.getElementById('form-titulo').textContent = 'Nueva entrada de día';
         }
 
-        // DIAS
+        /* ---------------- DÍAS (relato del día) ---------------- */
         async function guardarDia() {
             const data = {
                 numero: parseInt(document.getElementById('f-numero').value),
@@ -476,15 +761,15 @@
                 contenido: document.getElementById('f-contenido').value,
                 fotos: fotosUrls
             };
-            
-            if(!data.numero || !data.fecha || !data.destino) return toast('Faltan datos obligatorios');
-            
+
+            if (!data.numero || !data.fecha || !data.destino) return toast('Faltan datos obligatorios');
+
             try {
                 if (currentEditId) {
                     await SyncManager.save('dias/' + currentEditId, 'update', data);
                     toast('✅ Entrada guardada');
-                } else { 
-                    data.createdAt = "TIMESTAMP"; 
+                } else {
+                    data.createdAt = "TIMESTAMP";
                     await SyncManager.save('dias', 'push', data);
                     toast('✅ Nuevo día guardado');
                 }
@@ -496,20 +781,47 @@
         }
 
         async function cargarEntradas() {
-            const snap = await getRef('dias').once('value');
-            const arr = [];
-            snap.forEach(c => { arr.push({id: c.key, ...c.val()}); });
+            let arr = [];
+            const cache = getViajeCache(currentViajeId);
+
+            if (FIREBASE_AVAILABLE && navigator.onLine) {
+                try {
+                    const snap = await withTimeout(getRef('dias').once('value'));
+                    snap.forEach(c => { arr.push({ id: c.key, ...c.val() }); });
+                    cacheCollection(currentViajeId, 'dias', arr);
+                } catch (e) {
+                    arr = cache.dias || [];
+                }
+            } else {
+                arr = cache.dias || [];
+            }
+
+            arr = mergeQueued(arr, 'dias');
             arr.sort((a, b) => (a.numero || 0) - (b.numero || 0));
+
             const html = arr.map(d => `<div class="flex justify-between items-center py-3 border-b"><span class="font-bold text-gray-800">Día ${d.numero} - ${d.destino}</span> <div><button onclick="editarDia('${d.id}')" class="text-blue-600 bg-blue-50 px-3 py-1 rounded-md text-sm font-bold mr-2 hover:bg-blue-100 transition">Editar</button><button onclick="eliminarDia('${d.id}')" class="text-red-600 bg-red-50 px-3 py-1 rounded-md text-sm font-bold hover:bg-red-100 transition">Borrar</button></div></div>`).join('');
             document.getElementById('lista-entradas').innerHTML = html || '<p class="text-gray-400 italic py-4">No hay días registrados.</p>';
         }
 
         async function editarDia(id) {
-            const snap = await getRef('dias/' + id).once('value');
-            const d = snap.val();
-            
-            currentEditId = id; // ENGANCHE ESTRICTO EN MEMORIA
-            
+            let d = null;
+            const cache = getViajeCache(currentViajeId);
+
+            if (FIREBASE_AVAILABLE && navigator.onLine) {
+                try {
+                    const snap = await withTimeout(getRef('dias/' + id).once('value'));
+                    if (snap.exists()) { d = snap.val(); d.id = id; }
+                } catch (e) { /* usa caché */ }
+            }
+            if (!d) {
+                d = (cache.dias || []).find(x => x.id === id);
+            }
+            if (!d) {
+                d = mergeQueued([], 'dias').find(x => x.id === id);
+            }
+            if (!d) return toast('📴 No se pudo cargar el día (sin conexión ni caché).');
+
+            currentEditId = id;
             document.getElementById('f-numero').value = d.numero;
             document.getElementById('f-fecha').value = new Date(d.fecha).toISOString().split('T')[0];
             document.getElementById('f-destino').value = d.destino;
@@ -517,29 +829,47 @@
             document.getElementById('f-recorrido').value = d.recorrido || '';
             document.getElementById('f-contenido').value = d.contenido;
             fotosUrls = d.fotos || []; renderFotosPreview();
-            
+
             document.getElementById('form-titulo').innerHTML = `✏️ Editando Día ${d.numero} <button onclick="resetForm()" class="ml-4 text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded-full shadow-sm hover:bg-red-200 transition">Cancelar edición (Crear nuevo)</button>`;
-            
             switchTab('tab-nueva');
         }
 
-        async function eliminarDia(id) { if(confirm('¿Seguro que querés borrar este día entero?')) { await SyncManager.save('dias/'+id, 'remove'); cargarEntradas(); } }
+        async function eliminarDia(id) {
+            if (confirm('¿Seguro que querés borrar este día entero?')) {
+                await SyncManager.save('dias/' + id, 'remove');
+                cargarEntradas();
+            }
+        }
 
-        // COMENTARIOS Y FINANZAS
+        /* ---------------- COMENTARIOS ---------------- */
         let filtroComentarios = 'pendientes';
         async function cargarComentarios(f) {
-            if(f) filtroComentarios = f;
-            const snap = await getRef('comentarios').once('value');
-            let todos = []; snap.forEach(c => { todos.push({id: c.key, ...c.val()}); });
-            todos.sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0)); 
+            if (f) filtroComentarios = f;
+            let todos = [];
+
+            if (FIREBASE_AVAILABLE && navigator.onLine) {
+                try {
+                    const snap = await withTimeout(getRef('comentarios').once('value'));
+                    snap.forEach(c => { todos.push({ id: c.key, ...c.val() }); });
+                    cacheCollection(currentViajeId, 'comentarios', todos);
+                } catch (e) {
+                    todos = getViajeCache(currentViajeId).comentarios || [];
+                }
+            } else {
+                todos = getViajeCache(currentViajeId).comentarios || [];
+            }
+
+            todos = mergeQueued(todos, 'comentarios');
+            todos.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
             let html = ''; let countPendientes = 0;
             todos.forEach(c => {
-                if(!c.aprobado) countPendientes++;
-                if((filtroComentarios==='pendientes' && !c.aprobado) || (filtroComentarios==='aprobados' && c.aprobado)) {
-                    html += `<div class="p-3 border rounded mb-2 ${c.aprobado?'bg-green-50':'bg-red-50'}">${c.autor}: ${c.texto} <br>` +
-                        (!c.aprobado ? `<button onclick="SyncManager.save('comentarios/${c.id}', 'update', {aprobado:true});toast('Aprobado');cargarComentarios();" class="text-green-600 font-bold mt-1">Aprobar</button>` : 
-                        `<button onclick="SyncManager.save('comentarios/${c.id}', 'update', {aprobado:false});toast('Oculto');cargarComentarios();" class="text-orange-600 font-bold mt-1 mr-3">Ocultar</button>`) +
-                        `<button onclick="SyncManager.save('comentarios/${c.id}', 'remove');cargarComentarios();" class="text-red-600 font-bold mt-1 ml-3">Borrar</button></div>`;
+                if (!c.aprobado) countPendientes++;
+                if ((filtroComentarios === 'pendientes' && !c.aprobado) || (filtroComentarios === 'aprobados' && c.aprobado)) {
+                    html += `<div class="p-3 border rounded mb-2 ${c.aprobado ? 'bg-green-50' : 'bg-red-50'}">${c.autor}: ${c.texto} <br>` +
+                        (!c.aprobado ? `<button onclick="apobarComentario('${c.id}')" class="text-green-600 font-bold mt-1">Aprobar</button>` :
+                        `<button onclick="ocultarComentario('${c.id}')" class="text-orange-600 font-bold mt-1 mr-3">Ocultar</button>`) +
+                        `<button onclick="borrarComentario('${c.id}')" class="text-red-600 font-bold mt-1 ml-3">Borrar</button></div>`;
                 }
             });
             document.getElementById('lista-comentarios').innerHTML = html || '<p>No hay comentarios</p>';
@@ -548,37 +878,98 @@
         }
         function filtrarComentarios(f) { cargarComentarios(f); }
 
+        async function apobarComentario(id) { await SyncManager.save('comentarios/' + id, 'update', { aprobado: true }); toast('Aprobado'); cargarComentarios(); }
+        async function ocultarComentario(id) { await SyncManager.save('comentarios/' + id, 'update', { aprobado: false }); toast('Oculto'); cargarComentarios(); }
+        async function borrarComentario(id) { await SyncManager.save('comentarios/' + id, 'remove'); cargarComentarios(); }
+
+        async function actualizarBadgeComentarios() {
+            if (!currentViajeId) return;
+            let todos = getViajeCache(currentViajeId).comentarios || [];
+            if (FIREBASE_AVAILABLE && navigator.onLine) {
+                try {
+                    const snap = await withTimeout(getRef('comentarios').once('value'));
+                    todos = [];
+                    snap.forEach(c => { todos.push({ id: c.key, ...c.val() }); });
+                    cacheCollection(currentViajeId, 'comentarios', todos);
+                } catch (e) {}
+            }
+            let p = 0; todos.forEach(c => { if (!c.aprobado) p++; });
+            const badge = document.getElementById('badge-pendientes');
+            badge.textContent = p;
+            badge.classList.toggle('hidden', p === 0);
+        }
+
+        /* ---------------- FINANZAS Y GASTOS ---------------- */
         let viajerosList = [];
 
         async function initFinanzas() {
             const hoy = new Date().toISOString().split('T')[0];
-            if(!document.getElementById('c-tarjeta-fecha').value) document.getElementById('c-tarjeta-fecha').value = hoy;
-            if(!document.getElementById('g-fecha').value) document.getElementById('g-fecha').value = hoy;
-            
-            // Cargar configuración de viajeros
-            const vSnap = await getRef('configuracion/viajeros').once('value');
-            if(vSnap.exists()) {
-                viajerosList = vSnap.val();
+            if (!document.getElementById('c-tarjeta-fecha').value) document.getElementById('c-tarjeta-fecha').value = hoy;
+            if (!document.getElementById('g-fecha').value) document.getElementById('g-fecha').value = hoy;
+
+            const cache = getViajeCache(currentViajeId);
+            const cfg = cache.configuracion || {};
+
+            // Viajeros
+            let viajeros = cfg.viajeros || null;
+            if (FIREBASE_AVAILABLE && navigator.onLine) {
+                try {
+                    const vSnap = await withTimeout(getRef('configuracion/viajeros').once('value'));
+                    if (vSnap.exists()) {
+                        viajeros = vSnap.val();
+                        cache.configuracion = cache.configuracion || {};
+                        cache.configuracion.viajeros = viajeros;
+                        setViajeCache(currentViajeId, cache);
+                    }
+                } catch (e) {}
+            }
+            if (viajeros) {
+                viajerosList = viajeros;
                 document.getElementById('c-viajeros').value = viajerosList.join(', ');
                 actualizarUiViajeros();
             }
 
-            // Cargar presupuesto estimado
-            const pSnap = await getRef('configuracion/presupuesto_estimado').once('value');
-            if(pSnap.exists()) {
-                const p = pSnap.val();
-                document.getElementById('p-combustible').value = p.Combustible || '';
-                document.getElementById('p-hoteleria').value = p.Hoteleria || '';
-                document.getElementById('p-excursiones').value = p.Excursiones || '';
-                document.getElementById('p-alimentacion').value = p.Alimentacion || '';
-                document.getElementById('p-otros').value = p.Otros || '';
+            // Presupuesto estimado
+            let presupuesto = cfg.presupuesto_estimado || null;
+            if (FIREBASE_AVAILABLE && navigator.onLine) {
+                try {
+                    const pSnap = await withTimeout(getRef('configuracion/presupuesto_estimado').once('value'));
+                    if (pSnap.exists()) {
+                        presupuesto = pSnap.val();
+                        cache.configuracion = cache.configuracion || {};
+                        cache.configuracion.presupuesto_estimado = presupuesto;
+                        setViajeCache(currentViajeId, cache);
+                    }
+                } catch (e) {}
+            }
+            if (presupuesto) {
+                document.getElementById('p-combustible').value = presupuesto.Combustible || '';
+                document.getElementById('p-hoteleria').value = presupuesto.Hoteleria || '';
+                document.getElementById('p-excursiones').value = presupuesto.Excursiones || '';
+                document.getElementById('p-alimentacion').value = presupuesto.Alimentacion || '';
+                document.getElementById('p-otros').value = presupuesto.Otros || '';
             }
 
-            const cSnap = await getRef('configuracion/efectivo').once('value');
-            if(cSnap.exists()) {
-                document.getElementById('c-efectivo-ar-us').value = cSnap.val().ar_por_us; document.getElementById('c-efectivo-uy-us').value = cSnap.val().uy_por_us;
+            // Tasas efectivo
+            let efectivo = cfg.efectivo || null;
+            if (FIREBASE_AVAILABLE && navigator.onLine) {
+                try {
+                    const cSnap = await withTimeout(getRef('configuracion/efectivo').once('value'));
+                    if (cSnap.exists()) {
+                        efectivo = cSnap.val();
+                        cache.configuracion = cache.configuracion || {};
+                        cache.configuracion.efectivo = efectivo;
+                        setViajeCache(currentViajeId, cache);
+                    }
+                } catch (e) {}
             }
-            cargarCotizacionDiaria(document.getElementById('c-tarjeta-fecha').value); cargarUltimosGastos();
+            if (efectivo) {
+                document.getElementById('c-efectivo-ar-us').value = efectivo.ar_por_us;
+                document.getElementById('c-efectivo-uy-us').value = efectivo.uy_por_us;
+            }
+
+            cargarCotizacionDiaria(document.getElementById('c-tarjeta-fecha').value);
+            cargarUltimosGastos();
         }
 
         async function guardarPresupuestoEstimado() {
@@ -596,7 +987,7 @@
         async function guardarConfigViajeros() {
             const input = document.getElementById('c-viajeros').value;
             const lista = input.split(',').map(v => v.trim()).filter(v => v);
-            if(lista.length === 0) return toast('Ingresá al menos un viajero');
+            if (lista.length === 0) return toast('Ingresá al menos un viajero');
             await SyncManager.save('configuracion/viajeros', 'set', lista);
             viajerosList = lista;
             actualizarUiViajeros();
@@ -606,12 +997,10 @@
         function actualizarUiViajeros() {
             const selectPagador = document.getElementById('g-pagador');
             const divInvolucrados = document.getElementById('g-involucrados');
-            if(viajerosList.length === 0) return;
-            
-            // Llenar select
+            if (viajerosList.length === 0) return;
+
             selectPagador.innerHTML = viajerosList.map(v => `<option value="${v}">${v}</option>`).join('');
-            
-            // Llenar checkboxes (marcados por defecto)
+
             divInvolucrados.innerHTML = viajerosList.map(v => `
                 <label class="flex items-center gap-1 cursor-pointer">
                     <input type="checkbox" value="${v}" checked class="form-checkbox h-4 w-4 text-amber-600 rounded">
@@ -621,61 +1010,203 @@
         }
 
         document.getElementById('c-tarjeta-fecha').addEventListener('change', (e) => cargarCotizacionDiaria(e.target.value));
+
         async function cargarCotizacionDiaria(fecha) {
-            const snap = await getRef('cotizaciones/' + fecha).once('value');
-            if(snap.exists()) { document.getElementById('c-tarjeta-ar-us').value = snap.val().ar_por_us; document.getElementById('c-tarjeta-uy-us').value = snap.val().uy_por_us; } 
-            else { document.getElementById('c-tarjeta-ar-us').value = ''; document.getElementById('c-tarjeta-uy-us').value = ''; }
+            const cache = getViajeCache(currentViajeId);
+            let cot = (cache.cotizaciones || {})[fecha] || null;
+
+            if (FIREBASE_AVAILABLE && navigator.onLine) {
+                try {
+                    const snap = await withTimeout(getRef('cotizaciones/' + fecha).once('value'));
+                    if (snap.exists()) {
+                        cot = snap.val();
+                        cache.cotizaciones = cache.cotizaciones || {};
+                        cache.cotizaciones[fecha] = cot;
+                        setViajeCache(currentViajeId, cache);
+                    }
+                } catch (e) {}
+            }
+
+            if (cot) {
+                document.getElementById('c-tarjeta-ar-us').value = cot.ar_por_us;
+                document.getElementById('c-tarjeta-uy-us').value = cot.uy_por_us;
+            } else {
+                document.getElementById('c-tarjeta-ar-us').value = '';
+                document.getElementById('c-tarjeta-uy-us').value = '';
+            }
         }
-        async function guardarConfigEfectivo() { await SyncManager.save('configuracion/efectivo', 'set', {ar_por_us: parseFloat(document.getElementById('c-efectivo-ar-us').value), uy_por_us: parseFloat(document.getElementById('c-efectivo-uy-us').value)}); toast('Guardado'); }
-        async function guardarCotizacionDiaria() { await SyncManager.save('cotizaciones/'+document.getElementById('c-tarjeta-fecha').value, 'set', {ar_por_us: parseFloat(document.getElementById('c-tarjeta-ar-us').value), uy_por_us: parseFloat(document.getElementById('c-tarjeta-uy-us').value)}); toast('Guardado'); }
-        
+
+        async function guardarConfigEfectivo() {
+            await SyncManager.save('configuracion/efectivo', 'set', {
+                ar_por_us: parseFloat(document.getElementById('c-efectivo-ar-us').value),
+                uy_por_us: parseFloat(document.getElementById('c-efectivo-uy-us').value)
+            });
+            toast('Guardado');
+        }
+
+        async function guardarCotizacionDiaria() {
+            await SyncManager.save('cotizaciones/' + document.getElementById('c-tarjeta-fecha').value, 'set', {
+                ar_por_us: parseFloat(document.getElementById('c-tarjeta-ar-us').value),
+                uy_por_us: parseFloat(document.getElementById('c-tarjeta-uy-us').value)
+            });
+            toast('Guardado');
+        }
+
+        let currentGastoEditId = null;
+
+        function escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        function resetGastoForm() {
+            currentGastoEditId = null;
+            const hoy = new Date().toISOString().split('T')[0];
+            document.getElementById('g-fecha').value = hoy;
+            document.getElementById('g-categoria').value = 'Combustible';
+            document.getElementById('g-moneda').value = 'AR$';
+            document.getElementById('g-monto').value = '';
+            document.getElementById('g-metodo').value = 'Tarjeta';
+            document.getElementById('g-detalle').value = '';
+            actualizarUiViajeros();
+            document.getElementById('gasto-form-titulo').textContent = '📝 Registrar Nuevo Gasto';
+            document.getElementById('btn-guardar-gasto').textContent = 'Registrar Gasto';
+            document.getElementById('btn-guardar-gasto').classList.remove('bg-amber-600', 'hover:bg-amber-700');
+            document.getElementById('btn-guardar-gasto').classList.add('bg-gray-800');
+            document.getElementById('btn-cancelar-gasto').classList.add('hidden');
+        }
+
         async function guardarGasto() {
-            // Recolectar involucrados
             const checkboxes = document.querySelectorAll('#g-involucrados input[type="checkbox"]:checked');
             const involucrados = Array.from(checkboxes).map(cb => cb.value);
-            
-            const data = { 
-                fecha: document.getElementById('g-fecha').value, 
-                categoria: document.getElementById('g-categoria').value, 
-                moneda: document.getElementById('g-moneda').value, 
-                monto: parseFloat(document.getElementById('g-monto').value), 
-                metodo: document.getElementById('g-metodo').value, 
+
+            const data = {
+                fecha: document.getElementById('g-fecha').value,
+                categoria: document.getElementById('g-categoria').value,
+                moneda: document.getElementById('g-moneda').value,
+                monto: parseFloat(document.getElementById('g-monto').value),
+                metodo: document.getElementById('g-metodo').value,
                 detalle: document.getElementById('g-detalle').value,
                 pagador: document.getElementById('g-pagador').value || 'Sin asignar',
-                involucrados: involucrados.length > 0 ? involucrados : (viajerosList.length > 0 ? viajerosList : ['Sin asignar']),
-                timestamp: "TIMESTAMP" 
+                involucrados: involucrados.length > 0 ? involucrados : (viajerosList.length > 0 ? viajerosList : ['Sin asignar'])
             };
-            
-            if(!data.fecha || !data.monto) return toast('Faltan fecha o monto'); 
-            await SyncManager.save('gastos', 'push', data);
-            document.getElementById('g-monto').value = ''; document.getElementById('g-detalle').value = ''; 
-            toast('Guardado'); cargarUltimosGastos();
-        }
-        
-        async function cargarUltimosGastos() {
-            const snap = await getRef('gastos').orderByChild('fecha').limitToLast(15).once('value');
-            const arr = []; snap.forEach(c => { arr.push({id: c.key, ...c.val()}); }); arr.reverse();
-            document.getElementById('lista-gastos-admin').innerHTML = arr.map(d => `
-                <tr class="border-b">
-                    <td class="py-2">${d.fecha}</td>
-                    <td>${d.categoria}</td>
-                    <td><span class="bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded font-bold">${d.pagador || 'N/A'}</span></td>
-                    <td>${d.moneda} ${d.monto} (${d.metodo})</td>
-                    <td><button onclick="eliminarGasto('${d.id}')" class="text-red-500 text-xs">Borrar</button></td>
-                </tr>
-            `).join('');
-        }
-        async function eliminarGasto(id) { if(confirm('¿Borrar?')) { await SyncManager.save('gastos/'+id, 'remove'); cargarUltimosGastos(); } }
 
-        function toast(m) { const e = document.getElementById('toast'); e.textContent=m; e.classList.remove('hidden'); setTimeout(()=>e.classList.add('hidden'),3000); }
-        initCloudinaryWidget();
-        
-        // Inicializar app
-        initAdminGlobal().then(() => {
-            if(currentViajeId) {
-                getRef('comentarios').once('value').then(snap => { let p=0; snap.forEach(c => {if(!c.val().aprobado) p++;}); document.getElementById('badge-pendientes').textContent = p; document.getElementById('badge-pendientes').classList.toggle('hidden', p===0); });
+            if (!data.fecha || !data.monto) return toast('Faltan fecha o monto');
+
+            if (currentGastoEditId) {
+                await SyncManager.save('gastos/' + currentGastoEditId, 'update', data);
+                toast('Gasto actualizado');
+                resetGastoForm();
+            } else {
+                data.timestamp = "TIMESTAMP";
+                await SyncManager.save('gastos', 'push', data);
+                document.getElementById('g-monto').value = '';
+                document.getElementById('g-detalle').value = '';
+                toast('Guardado');
             }
-        });
+            cargarUltimosGastos();
+        }
+
+        async function editarGasto(id) {
+            const cache = getViajeCache(currentViajeId);
+            let g = (cache.gastos || []).find(x => x.id === id);
+            if (!g) g = mergeQueued(cache.gastos || [], 'gastos').find(x => x.id === id);
+            if (!g) return toast('No se encontró el gasto');
+
+            currentGastoEditId = id;
+            document.getElementById('g-fecha').value = g.fecha || '';
+            document.getElementById('g-categoria').value = g.categoria || 'Otros';
+            document.getElementById('g-moneda').value = g.moneda || 'AR$';
+            document.getElementById('g-monto').value = g.monto != null ? g.monto : '';
+            document.getElementById('g-metodo').value = g.metodo || 'Tarjeta';
+            document.getElementById('g-detalle').value = g.detalle || '';
+
+            actualizarUiViajeros();
+            const selectPagador = document.getElementById('g-pagador');
+            if (g.pagador && ![...selectPagador.options].some(o => o.value === g.pagador)) {
+                const opt = document.createElement('option');
+                opt.value = g.pagador;
+                opt.textContent = g.pagador;
+                selectPagador.appendChild(opt);
+            }
+            if (g.pagador) selectPagador.value = g.pagador;
+
+            const invol = Array.isArray(g.involucrados) ? g.involucrados : [];
+            document.querySelectorAll('#g-involucrados input[type="checkbox"]').forEach(cb => {
+                cb.checked = invol.length === 0 ? true : invol.includes(cb.value);
+            });
+
+            document.getElementById('gasto-form-titulo').textContent = '✏️ Editando gasto';
+            document.getElementById('btn-guardar-gasto').textContent = 'Guardar cambios';
+            document.getElementById('btn-guardar-gasto').classList.remove('bg-gray-800');
+            document.getElementById('btn-guardar-gasto').classList.add('bg-amber-600', 'hover:bg-amber-700');
+            document.getElementById('btn-cancelar-gasto').classList.remove('hidden');
+
+            document.getElementById('gasto-form-titulo').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        async function cargarUltimosGastos() {
+            const cache = getViajeCache(currentViajeId);
+            let arr = [];
+
+            if (FIREBASE_AVAILABLE && navigator.onLine) {
+                try {
+                    const snap = await withTimeout(getRef('gastos').orderByChild('fecha').once('value'));
+                    snap.forEach(c => { arr.push({ id: c.key, ...c.val() }); });
+                    cacheCollection(currentViajeId, 'gastos', arr);
+                } catch (e) {
+                    arr = cache.gastos || [];
+                }
+            } else {
+                arr = cache.gastos || [];
+            }
+
+            arr = mergeQueued(arr, 'gastos');
+            // Más reciente arriba: por fecha del gasto (desc), y dentro del mismo día
+            // por momento de registro (timestamp desc; si falta, el id de Firebase es cronológico)
+            arr.sort((a, b) =>
+                (b.fecha || '').localeCompare(a.fecha || '') ||
+                ((Number(b.timestamp) || 0) - (Number(a.timestamp) || 0)) ||
+                String(b.id || '').localeCompare(String(a.id || ''))
+            );
+
+            const countEl = document.getElementById('gastos-count');
+            if (countEl) countEl.textContent = arr.length ? `(${arr.length})` : '';
+
+            document.getElementById('lista-gastos-admin').innerHTML = arr.length ? arr.map(d => {
+                const invol = Array.isArray(d.involucrados) ? d.involucrados.join(', ') : '';
+                const editing = currentGastoEditId === d.id;
+                return `
+                <tr class="border-b ${editing ? 'bg-amber-50' : ''}">
+                    <td class="py-2 pr-2 whitespace-nowrap">${escapeHtml(d.fecha)}</td>
+                    <td class="pr-2">${escapeHtml(d.categoria)}</td>
+                    <td class="pr-2 max-w-[12rem] truncate" title="${escapeHtml(d.detalle || '')}">${escapeHtml(d.detalle || '—')}</td>
+                    <td class="pr-2"><span class="bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded font-bold">${escapeHtml(d.pagador || 'N/A')}</span></td>
+                    <td class="pr-2 text-xs text-gray-600">${escapeHtml(invol || '—')}</td>
+                    <td class="pr-2 whitespace-nowrap">${escapeHtml(d.moneda)} ${escapeHtml(d.monto)} <span class="text-gray-400">(${escapeHtml(d.metodo)})</span></td>
+                    <td class="whitespace-nowrap text-right">
+                        <button onclick="editarGasto('${d.id}')" class="text-blue-600 bg-blue-50 px-2 py-1 rounded text-xs font-bold mr-1 hover:bg-blue-100">Editar</button>
+                        <button onclick="eliminarGasto('${d.id}')" class="text-red-600 bg-red-50 px-2 py-1 rounded text-xs font-bold hover:bg-red-100">Borrar</button>
+                    </td>
+                </tr>`;
+            }).join('') : '<tr><td colspan="7" class="py-4 text-gray-400 italic">No hay gastos registrados.</td></tr>';
+        }
+
+        async function eliminarGasto(id) {
+            if (confirm('¿Borrar este gasto?')) {
+                await SyncManager.save('gastos/' + id, 'remove');
+                if (currentGastoEditId === id) resetGastoForm();
+                cargarUltimosGastos();
+            }
+        }
+
+        function toast(m) { const e = document.getElementById('toast'); e.textContent = m; e.classList.remove('hidden'); setTimeout(() => e.classList.add('hidden'), 3000); }
+
+        initCloudinaryWidget();
+
+        // Inicializar app
+        initAdminGlobal().then(() => actualizarBadgeComentarios());
     </script>
 </body>
 </html>
