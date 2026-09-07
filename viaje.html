@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bitácora de Viaje</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="lib/tailwindcss.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <!-- Playfair Display para los títulos estilo revista, Lato para el texto base -->
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,400;1,600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
@@ -22,7 +22,7 @@
         /* Efecto Letra Capital para el primer párrafo */
         .editorial-text > p:first-of-type::first-letter {
             font-family: 'Playfair Display', serif;
-            font-size: 5rem;
+            font-size: 2.5rem;
             font-weight: 900;
             line-height: 0.8;
             float: left;
@@ -41,7 +41,7 @@
     <header class="bg-white py-16 px-4 border-b border-gray-200 shadow-sm relative overflow-hidden">
         <div class="max-w-6xl mx-auto text-center relative z-10">
             <p class="text-gray-400 text-xs font-bold uppercase tracking-[0.4em] mb-4">Diario de Ruta</p>
-            <h1 class="text-6xl md:text-[8rem] font-serif font-black text-gray-900 tracking-tighter uppercase leading-none">
+            <h1 class="text-4xl md:text-[4rem] font-serif font-black text-gray-900 tracking-tighter uppercase leading-none">
                 Bitácora
             </h1>
             <div class="w-24 h-1 bg-amber-600 mx-auto mt-8 mb-6"></div>
@@ -100,8 +100,8 @@
     </div>
 
     <!-- Firebase Realtime DB SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="lib/firebase-app-compat.js"></script>
+    <script src="lib/firebase-database-compat.js"></script>
     <script src="firebase-config.js"></script>
 
     <script>
@@ -125,7 +125,7 @@
             }
             
             let viajes = [];
-            snap.forEach(c => { viajes.push({ id: c.key, ...c.val() }); });
+            snap.forEach(c => { viajes.push({ ...c.val(), id: c.key }); });
             viajes.sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
             
             const urlParams = new URLSearchParams(window.location.search);
@@ -191,7 +191,7 @@
         async function cargarDias() {
             const snap = await getRef('dias').orderByChild('numero').once('value');
             const dias = [];
-            snap.forEach(child => { dias.push({ id: child.key, ...child.val() }); });
+            snap.forEach(child => { dias.push({ ...child.val(), id: child.key }); });
             allTripDias = dias;
 
             if (dias.length > 0) {

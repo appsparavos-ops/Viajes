@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin — Bitácora de Viaje</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="lib/tailwindcss.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
     <script src="https://widget.cloudinary.com/v2.0/global/all.js" type="text/javascript"></script>
     <style>
@@ -126,6 +126,22 @@
                             </div>
                         </div>
 
+                        <div class="bg-white rounded-2xl shadow-sm p-6 border-l-4 border-emerald-500">
+                            <h2 class="text-lg font-bold mb-2">💱 Configuración de Monedas</h2>
+                            <p class="text-xs text-gray-500 mb-3">Definí la moneda del país de origen y las monedas a utilizar en el viaje (separadas por comas).</p>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                                <div>
+                                    <label class="text-xs font-bold text-gray-700">Moneda país de origen</label>
+                                    <input type="text" id="c-moneda-origen" placeholder="Ej: UY$" value="UY$" class="w-full border rounded-lg px-3 py-2 text-sm">
+                                </div>
+                                <div>
+                                    <label class="text-xs font-bold text-gray-700">Monedas del viaje (separadas por comas)</label>
+                                    <input type="text" id="c-monedas-gasto" placeholder="Ej: AR$, US$, UY$, CLP" value="AR$, US$, UY$" class="w-full border rounded-lg px-3 py-2 text-sm">
+                                </div>
+                            </div>
+                            <button onclick="guardarConfigMonedas()" class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold">Guardar Configuración de Monedas</button>
+                        </div>
+
                         <div class="bg-white rounded-2xl shadow-sm p-6 border-l-4 border-amber-500">
                             <h2 class="text-lg font-bold mb-2">🎯 Presupuesto Estimado (en US$)</h2>
                             <p class="text-xs text-gray-500 mb-3">Definí metas de gasto para comparar luego con lo real.</p>
@@ -148,39 +164,51 @@
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <div class="bg-white rounded-lg shadow-sm px-2.5 py-1.5 border-l-4 border-green-500">
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <span class="text-[11px] font-bold text-green-700 whitespace-nowrap">💵 Efectivo</span>
-                        <label class="text-[10px] text-gray-500 flex items-center gap-1">1 US$=AR$
-                            <input type="number" step="0.01" id="c-efectivo-ar-us" class="w-[4.5rem] border rounded px-1 py-0.5 text-[11px] leading-tight">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="text-[11px] font-bold text-green-700 whitespace-nowrap">💵 Cotiz. Efectivo</span>
+                        <label class="text-[10px] text-gray-500 flex items-center gap-1">Moneda:
+                            <select id="c-efectivo-moneda" class="border rounded px-1 py-0.5 text-[11px] leading-tight" onchange="cargarCotizacionEfectivoActual()">
+                            </select>
                         </label>
-                        <label class="text-[10px] text-gray-500 flex items-center gap-1">1 US$=UY$
-                            <input type="number" step="0.01" id="c-efectivo-uy-us" class="w-[4.5rem] border rounded px-1 py-0.5 text-[11px] leading-tight">
+                        <label class="text-[10px] text-gray-500 flex items-center gap-1">1 US$=<span id="lbl-efectivo-moneda">AR$</span>
+                            <input type="number" step="0.01" id="c-efectivo-us" class="w-[4rem] border rounded px-1 py-0.5 text-[11px] leading-tight">
+                        </label>
+                        <label class="text-[10px] text-gray-500 flex items-center gap-1">1 US$=<span id="lbl-efectivo-origen">UY$</span>
+                            <input type="number" step="0.01" id="c-efectivo-origen-us" class="w-[4rem] border rounded px-1 py-0.5 text-[11px] leading-tight">
                         </label>
                         <button onclick="guardarConfigEfectivo()" class="ml-auto px-2 py-0.5 bg-green-600 hover:bg-green-700 text-white rounded text-[10px] font-bold leading-tight">Guardar</button>
                     </div>
                 </div>
                 <div class="bg-white rounded-lg shadow-sm px-2.5 py-1.5 border-l-4 border-blue-500">
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <span class="text-[11px] font-bold text-blue-700 whitespace-nowrap">💳 Tarjeta</span>
-                        <input type="date" id="c-tarjeta-fecha" class="border rounded px-1 py-0.5 text-[11px] leading-tight w-[7.5rem]">
-                        <label class="text-[10px] text-gray-500 flex items-center gap-1">1 US$=AR$
-                            <input type="number" step="0.01" id="c-tarjeta-ar-us" class="w-[4.5rem] border rounded px-1 py-0.5 text-[11px] leading-tight">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="text-[11px] font-bold text-blue-700 whitespace-nowrap">💳 Cotiz. Tarjeta</span>
+                        <input type="date" id="c-tarjeta-fecha" class="border rounded px-1 py-0.5 text-[11px] leading-tight w-[7rem]">
+                        <label class="text-[10px] text-gray-500 flex items-center gap-1">Moneda:
+                            <select id="c-tarjeta-moneda" class="border rounded px-1 py-0.5 text-[11px] leading-tight" onchange="cargarCotizacionTarjetaActual()">
+                            </select>
                         </label>
-                        <label class="text-[10px] text-gray-500 flex items-center gap-1">1 US$=UY$
-                            <input type="number" step="0.01" id="c-tarjeta-uy-us" class="w-[4.5rem] border rounded px-1 py-0.5 text-[11px] leading-tight">
+                        <label class="text-[10px] text-gray-500 flex items-center gap-1">1 US$=<span id="lbl-tarjeta-moneda">AR$</span>
+                            <input type="number" step="0.01" id="c-tarjeta-us" class="w-[4rem] border rounded px-1 py-0.5 text-[11px] leading-tight">
+                        </label>
+                        <label class="text-[10px] text-gray-500 flex items-center gap-1">1 US$=<span id="lbl-tarjeta-origen">UY$</span>
+                            <input type="number" step="0.01" id="c-tarjeta-origen-us" class="w-[4rem] border rounded px-1 py-0.5 text-[11px] leading-tight">
                         </label>
                         <button onclick="guardarCotizacionDiaria()" class="ml-auto px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-bold leading-tight">Guardar</button>
                     </div>
                 </div>
             </div>
             <div class="bg-white rounded-2xl shadow p-6">
-                <h2 class="text-lg font-bold mb-4" id="gasto-form-titulo">📝 Registrar Nuevo Gasto</h2>
-                <div class="grid grid-cols-1 sm:grid-cols-5 gap-4 mb-4">
-                    <div><label class="text-sm">Fecha</label><input type="date" id="g-fecha" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+                <h2 class="text-lg font-bold mb-4 flex items-center">
+                    <span id="gasto-form-titulo-texto">📝 Registrar Nuevo Gasto</span>
+                    <a href="scanner.html" id="gasto-scanner-btn" class="ml-3 text-xs bg-gradient-to-r from-amber-600 to-amber-500 text-white px-3 py-1.5 rounded-full font-bold hover:brightness-110 transition shadow-sm flex items-center gap-1">📱 Scanner</a>
+                </h2>
+                <div class="grid grid-cols-1 sm:grid-cols-6 gap-3 mb-4">
+                    <div><label class="text-sm">Fecha</label><input type="date" id="g-fecha" class="w-full border rounded-lg px-3 py-2 text-sm" onchange="calcularMontoUSAuto()"></div>
                     <div><label class="text-sm">Categoría</label><select id="g-categoria" class="w-full border rounded-lg px-3 py-2 text-sm"><option value="Combustible">Combustible</option><option value="Hoteleria">Hotelería</option><option value="Excursiones">Excursiones</option><option value="Alimentacion">Alimentación</option><option value="Otros">Otros</option></select></div>
-                    <div><label class="text-sm">Moneda</label><select id="g-moneda" class="w-full border rounded-lg px-3 py-2 text-sm"><option value="AR$">AR$</option><option value="US$">US$</option><option value="UY$">UY$</option></select></div>
-                    <div><label class="text-sm">Monto</label><input type="number" step="0.01" id="g-monto" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
-                    <div><label class="text-sm">Método</label><select id="g-metodo" class="w-full border rounded-lg px-3 py-2 text-sm"><option value="Tarjeta">Tarjeta</option><option value="Efectivo">Efectivo</option></select></div>
+                    <div><label class="text-sm">Moneda</label><select id="g-moneda" class="w-full border rounded-lg px-3 py-2 text-sm" onchange="calcularMontoUSAuto()"></select></div>
+                    <div><label class="text-sm">Monto Orig.</label><input type="number" step="0.01" id="g-monto" class="w-full border rounded-lg px-3 py-2 text-sm" oninput="calcularMontoUSAuto()"></div>
+                    <div><label class="text-sm">Monto US$ <span class="text-[10px] text-amber-600 font-bold">(editable)</span></label><input type="number" step="0.01" id="g-monto-us" class="w-full border rounded-lg px-3 py-2 text-sm bg-amber-50 font-bold text-amber-900" oninput="onMontoUSManualChange()"></div>
+                    <div><label class="text-sm">Método</label><select id="g-metodo" class="w-full border rounded-lg px-3 py-2 text-sm" onchange="calcularMontoUSAuto()"><option value="Tarjeta">Tarjeta</option><option value="Efectivo">Efectivo</option></select></div>
                 </div>
                 <div class="mb-4"><label class="text-sm">Detalle</label><input type="text" id="g-detalle" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
 
@@ -218,7 +246,9 @@
                                 <th class="pr-2">Detalle</th>
                                 <th class="pr-2">Pagó</th>
                                 <th class="pr-2">Para</th>
-                                <th class="pr-2">Monto</th>
+                                <th class="pr-2">Monto Orig.</th>
+                                <th class="pr-2">Monto US$</th>
+                                <th class="pr-2"><span id="th-moneda-origen">Origen</span></th>
                                 <th></th>
                             </tr>
                         </thead>
@@ -231,8 +261,8 @@
 
     <div id="toast" class="fixed bottom-6 right-6 bg-gray-800 text-white px-5 py-3 rounded-xl hidden z-50 shadow-xl"></div>
 
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="lib/firebase-app-compat.js"></script>
+    <script src="lib/firebase-database-compat.js"></script>
     <script src="firebase-config.js"></script>
 
     <script>
@@ -256,14 +286,23 @@
         const FIREBASE_AVAILABLE = typeof firebase !== 'undefined' && typeof firebaseConfig !== 'undefined';
 
         let db = null;
+        let isFirebaseConnected = false;
         if (FIREBASE_AVAILABLE) {
-            firebase.initializeApp(firebaseConfig);
-            db = firebase.database();
+            try {
+                firebase.initializeApp(firebaseConfig);
+                db = firebase.database();
+            } catch (e) {
+                console.warn('Error inicializando Firebase:', e);
+            }
+        }
+
+        function checkIsOnline() {
+            return isFirebaseConnected || (typeof navigator !== 'undefined' && navigator.onLine !== false);
         }
 
         let currentViajeId = null;
 
-        const TIMEOUT_MS = 6000; // segundos de espera máxima a Firebase
+        const TIMEOUT_MS = 12000; // segundos de espera máxima a Firebase
 
         const CACHE = {
             viajes: 'travelapp_viajes_cache',
@@ -275,6 +314,34 @@
         };
 
         /* ---------------- Utilidades ---------------- */
+        function toFbKey(key) {
+            return String(key).replace(/\$/g, '_S_').replace(/\./g, '_D_').replace(/#/g, '_H_').replace(/\//g, '_F_');
+        }
+
+        function fromFbKey(key) {
+            return String(key).replace(/_S_/g, '$').replace(/_D_/g, '.').replace(/_H_/g, '#').replace(/_F_/g, '/');
+        }
+
+        function encodeObjectKeys(obj) {
+            if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
+            const res = {};
+            for (const k of Object.keys(obj)) {
+                res[toFbKey(k)] = obj[k];
+            }
+            return res;
+        }
+
+        function decodeObjectKeys(obj) {
+            if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return obj;
+            const res = {};
+            for (const k of Object.keys(obj)) {
+                res[fromFbKey(k)] = (obj[k] && typeof obj[k] === 'object' && !Array.isArray(obj[k]))
+                    ? decodeObjectKeys(obj[k])
+                    : obj[k];
+            }
+            return res;
+        }
+
         function getCache(key) {
             try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; }
             catch (e) { return null; }
@@ -408,27 +475,31 @@
                 let generatedId = null;
                 if (action === 'push') generatedId = genId(); // id estable para caché + firebase + cola
 
+                const sanitizedData = (data && typeof data === 'object' && !Array.isArray(data))
+                    ? encodeObjectKeys(data)
+                    : data;
+
                 // 1) Write-through a la caché local (siempre hay respaldo)
                 if (!isGlobal && viajeId) {
                     if (action === 'push') {
-                        applyToCache(path + '/' + generatedId, 'set', data, viajeId);
+                        applyToCache(path + '/' + generatedId, 'set', sanitizedData, viajeId);
                     } else {
-                        applyToCache(path, action, data, viajeId);
+                        applyToCache(path, action, sanitizedData, viajeId);
                     }
                 }
 
                 // 2) Intentar escribir en Firebase si hay conexión
                 let wrote = false;
-                if (FIREBASE_AVAILABLE && navigator.onLine) {
+                if (FIREBASE_AVAILABLE && checkIsOnline()) {
                     try {
                         const ref = isGlobal ? db.ref(path) : getRef(path);
                         await withTimeout((async () => {
                             if (action === 'push') {
-                                await ref.child(generatedId).set(normalizeTimestamps(deepClone(data), 'server'));
+                                await ref.child(generatedId).set(normalizeTimestamps(deepClone(sanitizedData), 'server'));
                             } else if (action === 'update') {
-                                await ref.update(normalizeTimestamps(deepClone(data), 'server'));
+                                await ref.update(normalizeTimestamps(deepClone(sanitizedData), 'server'));
                             } else if (action === 'set') {
-                                await ref.set(normalizeTimestamps(deepClone(data), 'server'));
+                                await ref.set(normalizeTimestamps(deepClone(sanitizedData), 'server'));
                             } else if (action === 'remove') {
                                 await ref.remove();
                             }
@@ -445,13 +516,13 @@
                         id: Date.now(),
                         path: action === 'push' ? path + '/' + (generatedId || genId()) : path,
                         action: action === 'push' ? 'set' : action,
-                        data: data == null ? null : deepClone(data),
+                        data: sanitizedData == null ? null : deepClone(sanitizedData),
                         isGlobal,
                         viajeId
                     };
                     this.queue.push(op);
                     this.saveQueue();
-                    if (navigator.onLine) toast('⚠️ Sin respuesta del servidor. Guardado localmente (se sincronizará).');
+                    if (checkIsOnline()) toast('⚠️ Sin respuesta del servidor. Guardado localmente (se sincronizará).');
                     else toast('Guardado localmente (Modo Offline) 📴');
                 } else {
                     this.updateUI();
@@ -469,7 +540,7 @@
                         btn.innerHTML = `<span>🔄 Sincronizar (${this.queue.length})</span>`;
                         btn.classList.add('bg-red-600', 'animate-pulse');
                         btn.classList.remove('bg-gray-600');
-                    } else if (!navigator.onLine || !FIREBASE_AVAILABLE) {
+                    } else if (!checkIsOnline() || !FIREBASE_AVAILABLE) {
                         btn.classList.remove('hidden');
                         btn.innerHTML = `<span>📵 Offline</span>`;
                         btn.classList.remove('bg-red-600', 'animate-pulse');
@@ -478,11 +549,11 @@
                         btn.classList.add('hidden');
                     }
                 }
-                if (banner) banner.classList.toggle('hidden', !!navigator.onLine);
+                if (banner) banner.classList.toggle('hidden', checkIsOnline());
 
                 const btnUpload = document.getElementById('btn-upload');
                 if (btnUpload) {
-                    if (navigator.onLine) {
+                    if (checkIsOnline()) {
                         btnUpload.disabled = false;
                         btnUpload.classList.remove('opacity-50', 'cursor-not-allowed');
                         btnUpload.textContent = '📷 Subir fotos a Cloudinary';
@@ -496,7 +567,7 @@
 
             async sync(auto = false) {
                 if (!FIREBASE_AVAILABLE) { if (!auto) toast('Firebase no disponible. Reconectate y recargá la app para sincronizar.'); return; }
-                if (!navigator.onLine) { if (!auto) toast('No hay conexión a internet.'); return; }
+                if (!checkIsOnline()) { if (!auto) toast('No hay conexión a internet.'); return; }
                 if (this.queue.length === 0) { if (!auto) toast('No hay elementos pendientes.'); return; }
 
                 if (!auto) toast('Sincronizando...');
@@ -506,23 +577,38 @@
                 try {
                     for (let i = 0; i < this.queue.length; i++) {
                         const op = this.queue[i];
-                        // El item guarda el viaje al que pertenece: no se mezclan viajes
                         let ref = op.isGlobal ? db.ref(op.path) : db.ref(`viajes_data/${op.viajeId}/${op.path}`);
-                        if (op.action === 'set') await ref.set(normalizeTimestamps(deepClone(op.data), 'server'));
-                        else if (op.action === 'update') await ref.update(normalizeTimestamps(deepClone(op.data), 'server'));
+                        const payload = (op.data && typeof op.data === 'object' && !Array.isArray(op.data))
+                            ? encodeObjectKeys(op.data)
+                            : op.data;
+
+                        if (op.action === 'set') await ref.set(normalizeTimestamps(deepClone(payload), 'server'));
+                        else if (op.action === 'update') await ref.update(normalizeTimestamps(deepClone(payload), 'server'));
                         else if (op.action === 'remove') await ref.remove();
                     }
                     this.queue = [];
                     this.saveQueue();
                     if (!auto) toast('✅ Sincronización completa');
-                    await initAdminGlobal(); // refrescar pantalla sin recargar
+                    await initAdminGlobal();
                 } catch (e) {
                     console.error(e);
-                    if (!auto) toast('❌ Error al sincronizar. Reintentá cuando haya conexión.');
+                    if (!auto) toast('❌ Error al sincronizar: ' + (e.message || e));
                     this.updateUI();
                 }
             }
         };
+
+        if (FIREBASE_AVAILABLE && db) {
+            try {
+                db.ref('.info/connected').on('value', snap => {
+                    isFirebaseConnected = !!snap.val();
+                    SyncManager.updateUI();
+                    if (isFirebaseConnected && SyncManager.queue.length > 0) {
+                        SyncManager.sync(true);
+                    }
+                });
+            } catch (e) {}
+        }
 
         window.addEventListener('online', () => { SyncManager.updateUI(); SyncManager.sync(true); });
         window.addEventListener('offline', () => SyncManager.updateUI());
@@ -535,11 +621,11 @@
             let viaSource = 'online';
 
             // 1) Intentar leer de Firebase con timeout
-            if (FIREBASE_AVAILABLE && navigator.onLine) {
+            if (FIREBASE_AVAILABLE && checkIsOnline()) {
                 try {
                     const snap = await withTimeout(db.ref('viajes_index').once('value'));
                     if (snap.exists()) {
-                        snap.forEach(c => { viajes.push({ id: c.key, ...c.val() }); });
+                        snap.forEach(c => { viajes.push({ ...c.val(), id: c.key }); });
                         viajes.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
                         setCache(CACHE.viajes, viajes);
                     }
@@ -787,7 +873,7 @@
             if (FIREBASE_AVAILABLE && navigator.onLine) {
                 try {
                     const snap = await withTimeout(getRef('dias').once('value'));
-                    snap.forEach(c => { arr.push({ id: c.key, ...c.val() }); });
+                    snap.forEach(c => { arr.push({ ...c.val(), id: c.key }); });
                     cacheCollection(currentViajeId, 'dias', arr);
                 } catch (e) {
                     arr = cache.dias || [];
@@ -850,7 +936,7 @@
             if (FIREBASE_AVAILABLE && navigator.onLine) {
                 try {
                     const snap = await withTimeout(getRef('comentarios').once('value'));
-                    snap.forEach(c => { todos.push({ id: c.key, ...c.val() }); });
+                    snap.forEach(c => { todos.push({ ...c.val(), id: c.key }); });
                     cacheCollection(currentViajeId, 'comentarios', todos);
                 } catch (e) {
                     todos = getViajeCache(currentViajeId).comentarios || [];
@@ -889,7 +975,7 @@
                 try {
                     const snap = await withTimeout(getRef('comentarios').once('value'));
                     todos = [];
-                    snap.forEach(c => { todos.push({ id: c.key, ...c.val() }); });
+                    snap.forEach(c => { todos.push({ ...c.val(), id: c.key }); });
                     cacheCollection(currentViajeId, 'comentarios', todos);
                 } catch (e) {}
             }
@@ -901,6 +987,11 @@
 
         /* ---------------- FINANZAS Y GASTOS ---------------- */
         let viajerosList = [];
+        let monedaOrigen = 'UY$';
+        let monedasGastoList = ['AR$', 'US$', 'UY$'];
+        let cotizacionesEfectivoMemoria = {};
+        let cotizacionesTarjetaMemoria = {};
+        let esMontoUSManual = false;
 
         async function initFinanzas() {
             const hoy = new Date().toISOString().split('T')[0];
@@ -910,7 +1001,26 @@
             const cache = getViajeCache(currentViajeId);
             const cfg = cache.configuracion || {};
 
-            // Viajeros
+            // 1. Monedas
+            let orig = cfg.moneda_origen || 'UY$';
+            let mList = cfg.monedas_gasto || ['AR$', 'US$', 'UY$'];
+            if (FIREBASE_AVAILABLE && navigator.onLine) {
+                try {
+                    const mSnap = await withTimeout(getRef('configuracion').once('value'));
+                    if (mSnap.exists()) {
+                        const val = mSnap.val();
+                        if (val.moneda_origen) orig = val.moneda_origen;
+                        if (val.monedas_gasto) mList = val.monedas_gasto;
+                    }
+                } catch (e) {}
+            }
+            monedaOrigen = orig;
+            monedasGastoList = Array.isArray(mList) ? mList : String(mList).split(',').map(s => s.trim()).filter(Boolean);
+            document.getElementById('c-moneda-origen').value = monedaOrigen;
+            document.getElementById('c-monedas-gasto').value = monedasGastoList.join(', ');
+            actualizarSelectoresMonedas();
+
+            // 2. Viajeros
             let viajeros = cfg.viajeros || null;
             if (FIREBASE_AVAILABLE && navigator.onLine) {
                 try {
@@ -929,7 +1039,7 @@
                 actualizarUiViajeros();
             }
 
-            // Presupuesto estimado
+            // 3. Presupuesto estimado
             let presupuesto = cfg.presupuesto_estimado || null;
             if (FIREBASE_AVAILABLE && navigator.onLine) {
                 try {
@@ -950,7 +1060,7 @@
                 document.getElementById('p-otros').value = presupuesto.Otros || '';
             }
 
-            // Tasas efectivo
+            // 4. Tasas efectivo
             let efectivo = cfg.efectivo || null;
             if (FIREBASE_AVAILABLE && navigator.onLine) {
                 try {
@@ -963,13 +1073,201 @@
                     }
                 } catch (e) {}
             }
-            if (efectivo) {
-                document.getElementById('c-efectivo-ar-us').value = efectivo.ar_por_us;
-                document.getElementById('c-efectivo-uy-us').value = efectivo.uy_por_us;
+            if (efectivo) cotizacionesEfectivoMemoria = efectivo;
+            cargarCotizacionEfectivoActual();
+
+            // 5. Cotizaciones tarjeta
+            await cargarCotizacionDiaria(document.getElementById('c-tarjeta-fecha').value);
+
+            cargarUltimosGastos();
+        }
+
+        function actualizarSelectoresMonedas() {
+            // Select de monedas en formulario de gasto
+            const gMonedaSelect = document.getElementById('g-moneda');
+            const valPrevG = gMonedaSelect.value;
+            gMonedaSelect.innerHTML = monedasGastoList.map(m => `<option value="${m}">${m}</option>`).join('');
+            if (monedasGastoList.includes(valPrevG)) gMonedaSelect.value = valPrevG;
+
+            // Select de monedas en cotizaciones efectivo (excluyendo US$)
+            const efMonedaSelect = document.getElementById('c-efectivo-moneda');
+            const valPrevEf = efMonedaSelect.value;
+            const monedasCotizables = monedasGastoList.filter(m => m !== 'US$' && m !== monedaOrigen);
+            if (monedasCotizables.length === 0) monedasCotizables.push(monedasGastoList[0] || 'AR$');
+            efMonedaSelect.innerHTML = monedasCotizables.map(m => `<option value="${m}">${m}</option>`).join('');
+            if (monedasCotizables.includes(valPrevEf)) efMonedaSelect.value = valPrevEf;
+
+            // Select de monedas en cotizaciones tarjeta
+            const tjMonedaSelect = document.getElementById('c-tarjeta-moneda');
+            const valPrevTj = tjMonedaSelect.value;
+            tjMonedaSelect.innerHTML = monedasCotizables.map(m => `<option value="${m}">${m}</option>`).join('');
+            if (monedasCotizables.includes(valPrevTj)) tjMonedaSelect.value = valPrevTj;
+
+            // Update labels
+            document.getElementById('lbl-efectivo-origen').textContent = monedaOrigen;
+            document.getElementById('lbl-tarjeta-origen').textContent = monedaOrigen;
+            const thOrigen = document.getElementById('th-moneda-origen');
+            if (thOrigen) thOrigen.textContent = `Monto (${monedaOrigen})`;
+
+            cargarCotizacionEfectivoActual();
+            cargarCotizacionTarjetaActual();
+            calcularMontoUSAuto();
+        }
+
+        async function guardarConfigMonedas() {
+            const origenInput = document.getElementById('c-moneda-origen').value.trim();
+            const gastoInput = document.getElementById('c-monedas-gasto').value;
+            if (!origenInput) return toast('Ingresá la moneda de origen');
+            const lista = gastoInput.split(',').map(v => v.trim()).filter(Boolean);
+            if (lista.length === 0) return toast('Ingresá al menos una moneda de gasto');
+            if (!lista.includes('US$')) lista.push('US$');
+            if (!lista.includes(origenInput)) lista.push(origenInput);
+
+            monedaOrigen = origenInput;
+            monedasGastoList = lista;
+
+            await SyncManager.save('configuracion/moneda_origen', 'set', monedaOrigen);
+            await SyncManager.save('configuracion/monedas_gasto', 'set', monedasGastoList);
+
+            actualizarSelectoresMonedas();
+            toast('Monedas guardadas');
+        }
+
+        function cargarCotizacionEfectivoActual() {
+            const mSelect = document.getElementById('c-efectivo-moneda').value;
+            document.getElementById('lbl-efectivo-moneda').textContent = mSelect;
+            document.getElementById('lbl-efectivo-origen').textContent = monedaOrigen;
+
+            const ef = decodeObjectKeys(cotizacionesEfectivoMemoria);
+            const tasaUs = ef[mSelect] || (mSelect === 'AR$' ? ef.ar_por_us : '') || '';
+            const tasaOrigen = ef[monedaOrigen] || (monedaOrigen === 'UY$' ? ef.uy_por_us : '') || '';
+
+            document.getElementById('c-efectivo-us').value = tasaUs;
+            document.getElementById('c-efectivo-origen-us').value = tasaOrigen;
+        }
+
+        function cargarCotizacionTarjetaActual() {
+            const mSelect = document.getElementById('c-tarjeta-moneda').value;
+            document.getElementById('lbl-tarjeta-moneda').textContent = mSelect;
+            document.getElementById('lbl-tarjeta-origen').textContent = monedaOrigen;
+
+            const fecha = document.getElementById('c-tarjeta-fecha').value;
+            const cache = getViajeCache(currentViajeId);
+            const cotFechaRaw = cotizacionesTarjetaMemoria || (cache.cotizaciones || {})[fecha] || {};
+            const cotFecha = decodeObjectKeys(cotFechaRaw);
+
+            const tasaUs = cotFecha[mSelect] || (mSelect === 'AR$' ? cotFecha.ar_por_us : '') || '';
+            const tasaOrigen = cotFecha[monedaOrigen] || (monedaOrigen === 'UY$' ? cotFecha.uy_por_us : '') || '';
+
+            document.getElementById('c-tarjeta-us').value = tasaUs;
+            document.getElementById('c-tarjeta-origen-us').value = tasaOrigen;
+        }
+
+        async function cargarCotizacionDiaria(fecha) {
+            const cache = getViajeCache(currentViajeId);
+            let cot = (cache.cotizaciones || {})[fecha] || null;
+
+            if (FIREBASE_AVAILABLE && checkIsOnline()) {
+                try {
+                    const snap = await withTimeout(getRef('cotizaciones/' + fecha).once('value'));
+                    if (snap.exists()) {
+                        cot = snap.val();
+                        cache.cotizaciones = cache.cotizaciones || {};
+                        cache.cotizaciones[fecha] = cot;
+                        setViajeCache(currentViajeId, cache);
+                    }
+                } catch (e) {}
             }
 
-            cargarCotizacionDiaria(document.getElementById('c-tarjeta-fecha').value);
-            cargarUltimosGastos();
+            cotizacionesTarjetaMemoria = decodeObjectKeys(cot || {});
+            cargarCotizacionTarjetaActual();
+        }
+
+        async function guardarConfigEfectivo() {
+            const mSelect = document.getElementById('c-efectivo-moneda').value;
+            const valUs = parseFloat(document.getElementById('c-efectivo-us').value) || 0;
+            const valOrigen = parseFloat(document.getElementById('c-efectivo-origen-us').value) || 0;
+
+            cotizacionesEfectivoMemoria[mSelect] = valUs;
+            cotizacionesEfectivoMemoria[monedaOrigen] = valOrigen;
+            if (mSelect === 'AR$') cotizacionesEfectivoMemoria.ar_por_us = valUs;
+            if (monedaOrigen === 'UY$') cotizacionesEfectivoMemoria.uy_por_us = valOrigen;
+
+            await SyncManager.save('configuracion/efectivo', 'set', encodeObjectKeys(cotizacionesEfectivoMemoria));
+            toast('Cotización Efectivo guardada');
+            calcularMontoUSAuto();
+        }
+
+        async function guardarCotizacionDiaria() {
+            const fecha = document.getElementById('c-tarjeta-fecha').value;
+            const mSelect = document.getElementById('c-tarjeta-moneda').value;
+            const valUs = parseFloat(document.getElementById('c-tarjeta-us').value) || 0;
+            const valOrigen = parseFloat(document.getElementById('c-tarjeta-origen-us').value) || 0;
+
+            cotizacionesTarjetaMemoria[mSelect] = valUs;
+            cotizacionesTarjetaMemoria[monedaOrigen] = valOrigen;
+            if (mSelect === 'AR$') cotizacionesTarjetaMemoria.ar_por_us = valUs;
+            if (monedaOrigen === 'UY$') cotizacionesTarjetaMemoria.uy_por_us = valOrigen;
+
+            await SyncManager.save('cotizaciones/' + fecha, 'set', encodeObjectKeys(cotizacionesTarjetaMemoria));
+            toast('Cotización Tarjeta guardada');
+            calcularMontoUSAuto();
+        }
+
+        function obtenerTasaMoneda(metodo, fecha, moneda) {
+            if (moneda === 'US$') return 1;
+            const cache = getViajeCache(currentViajeId);
+
+            if (metodo === 'Efectivo') {
+                const efRaw = cotizacionesEfectivoMemoria || (cache.configuracion || {}).efectivo || {};
+                const ef = decodeObjectKeys(efRaw);
+                if (ef[moneda]) return parseFloat(ef[moneda]);
+                if (moneda === 'AR$' && ef.ar_por_us) return parseFloat(ef.ar_por_us);
+                if (moneda === monedaOrigen && ef.uy_por_us) return parseFloat(ef.uy_por_us);
+                return 1;
+            } else {
+                const cots = cache.cotizaciones || {};
+                let cotFechaRaw = cots[fecha];
+                if (!cotFechaRaw) {
+                    const fechas = Object.keys(cots).sort();
+                    const ant = fechas.filter(f => f <= fecha);
+                    if (ant.length > 0) cotFechaRaw = cots[ant[ant.length - 1]];
+                    else if (fechas.length > 0) cotFechaRaw = cots[fechas[0]];
+                }
+                const cotFecha = decodeObjectKeys(cotFechaRaw);
+                if (cotFecha) {
+                    if (cotFecha[moneda]) return parseFloat(cotFecha[moneda]);
+                    if (moneda === 'AR$' && cotFecha.ar_por_us) return parseFloat(cotFecha.ar_por_us);
+                    if (moneda === monedaOrigen && cotFecha.uy_por_us) return parseFloat(cotFecha.uy_por_us);
+                }
+                return obtenerTasaMoneda('Efectivo', fecha, moneda);
+            }
+        }
+
+        function calcularMontoUSAuto() {
+            if (esMontoUSManual) return;
+            const monto = parseFloat(document.getElementById('g-monto').value);
+            if (isNaN(monto) || monto <= 0) {
+                document.getElementById('g-monto-us').value = '';
+                return;
+            }
+
+            const moneda = document.getElementById('g-moneda').value;
+            const metodo = document.getElementById('g-metodo').value;
+            const fecha = document.getElementById('g-fecha').value;
+
+            let montoUS = 0;
+            if (moneda === 'US$') {
+                montoUS = monto;
+            } else {
+                const tasa = obtenerTasaMoneda(metodo, fecha, moneda);
+                montoUS = tasa > 0 ? (monto / tasa) : monto;
+            }
+            document.getElementById('g-monto-us').value = montoUS ? (Math.round(montoUS * 100) / 100) : '';
+        }
+
+        function onMontoUSManualChange() {
+            esMontoUSManual = true;
         }
 
         async function guardarPresupuestoEstimado() {
@@ -1011,47 +1309,6 @@
 
         document.getElementById('c-tarjeta-fecha').addEventListener('change', (e) => cargarCotizacionDiaria(e.target.value));
 
-        async function cargarCotizacionDiaria(fecha) {
-            const cache = getViajeCache(currentViajeId);
-            let cot = (cache.cotizaciones || {})[fecha] || null;
-
-            if (FIREBASE_AVAILABLE && navigator.onLine) {
-                try {
-                    const snap = await withTimeout(getRef('cotizaciones/' + fecha).once('value'));
-                    if (snap.exists()) {
-                        cot = snap.val();
-                        cache.cotizaciones = cache.cotizaciones || {};
-                        cache.cotizaciones[fecha] = cot;
-                        setViajeCache(currentViajeId, cache);
-                    }
-                } catch (e) {}
-            }
-
-            if (cot) {
-                document.getElementById('c-tarjeta-ar-us').value = cot.ar_por_us;
-                document.getElementById('c-tarjeta-uy-us').value = cot.uy_por_us;
-            } else {
-                document.getElementById('c-tarjeta-ar-us').value = '';
-                document.getElementById('c-tarjeta-uy-us').value = '';
-            }
-        }
-
-        async function guardarConfigEfectivo() {
-            await SyncManager.save('configuracion/efectivo', 'set', {
-                ar_por_us: parseFloat(document.getElementById('c-efectivo-ar-us').value),
-                uy_por_us: parseFloat(document.getElementById('c-efectivo-uy-us').value)
-            });
-            toast('Guardado');
-        }
-
-        async function guardarCotizacionDiaria() {
-            await SyncManager.save('cotizaciones/' + document.getElementById('c-tarjeta-fecha').value, 'set', {
-                ar_por_us: parseFloat(document.getElementById('c-tarjeta-ar-us').value),
-                uy_por_us: parseFloat(document.getElementById('c-tarjeta-uy-us').value)
-            });
-            toast('Guardado');
-        }
-
         let currentGastoEditId = null;
 
         function escapeHtml(s) {
@@ -1062,15 +1319,18 @@
 
         function resetGastoForm() {
             currentGastoEditId = null;
+            esMontoUSManual = false;
             const hoy = new Date().toISOString().split('T')[0];
             document.getElementById('g-fecha').value = hoy;
             document.getElementById('g-categoria').value = 'Combustible';
-            document.getElementById('g-moneda').value = 'AR$';
+            if (monedasGastoList.length > 0) document.getElementById('g-moneda').value = monedasGastoList[0];
             document.getElementById('g-monto').value = '';
+            document.getElementById('g-monto-us').value = '';
             document.getElementById('g-metodo').value = 'Tarjeta';
             document.getElementById('g-detalle').value = '';
             actualizarUiViajeros();
-            document.getElementById('gasto-form-titulo').textContent = '📝 Registrar Nuevo Gasto';
+            document.getElementById('gasto-form-titulo-texto').textContent = '📝 Registrar Nuevo Gasto';
+            document.getElementById('gasto-scanner-btn').classList.remove('hidden');
             document.getElementById('btn-guardar-gasto').textContent = 'Registrar Gasto';
             document.getElementById('btn-guardar-gasto').classList.remove('bg-amber-600', 'hover:bg-amber-700');
             document.getElementById('btn-guardar-gasto').classList.add('bg-gray-800');
@@ -1081,18 +1341,43 @@
             const checkboxes = document.querySelectorAll('#g-involucrados input[type="checkbox"]:checked');
             const involucrados = Array.from(checkboxes).map(cb => cb.value);
 
+            const monto = parseFloat(document.getElementById('g-monto').value);
+            const moneda = document.getElementById('g-moneda').value;
+            const metodo = document.getElementById('g-metodo').value;
+            const fecha = document.getElementById('g-fecha').value;
+
+            let montoUS = parseFloat(document.getElementById('g-monto-us').value);
+            if (isNaN(montoUS) || montoUS <= 0) {
+                const tasa = obtenerTasaMoneda(metodo, fecha, moneda);
+                montoUS = (moneda === 'US$') ? monto : (tasa > 0 ? monto / tasa : monto);
+            }
+
+            const tasaOrigen = obtenerTasaMoneda(metodo, fecha, monedaOrigen);
+            let montoOrigen = 0;
+            if (moneda === monedaOrigen) {
+                montoOrigen = monto;
+            } else {
+                montoOrigen = tasaOrigen > 0 ? montoUS * tasaOrigen : montoUS;
+            }
+
+            montoUS = Math.round(montoUS * 100) / 100;
+            montoOrigen = Math.round(montoOrigen * 100) / 100;
+
             const data = {
-                fecha: document.getElementById('g-fecha').value,
+                fecha: fecha,
                 categoria: document.getElementById('g-categoria').value,
-                moneda: document.getElementById('g-moneda').value,
-                monto: parseFloat(document.getElementById('g-monto').value),
-                metodo: document.getElementById('g-metodo').value,
+                moneda: moneda,
+                monto: monto,
+                montoUS: montoUS,
+                montoOrigen: montoOrigen,
+                monedaOrigen: monedaOrigen,
+                metodo: metodo,
                 detalle: document.getElementById('g-detalle').value,
                 pagador: document.getElementById('g-pagador').value || 'Sin asignar',
                 involucrados: involucrados.length > 0 ? involucrados : (viajerosList.length > 0 ? viajerosList : ['Sin asignar'])
             };
 
-            if (!data.fecha || !data.monto) return toast('Faltan fecha o monto');
+            if (!data.fecha || isNaN(data.monto)) return toast('Faltan fecha o monto');
 
             if (currentGastoEditId) {
                 await SyncManager.save('gastos/' + currentGastoEditId, 'update', data);
@@ -1102,9 +1387,11 @@
                 data.timestamp = "TIMESTAMP";
                 await SyncManager.save('gastos', 'push', data);
                 document.getElementById('g-monto').value = '';
+                document.getElementById('g-monto-us').value = '';
                 document.getElementById('g-detalle').value = '';
                 toast('Guardado');
             }
+            esMontoUSManual = false;
             cargarUltimosGastos();
         }
 
@@ -1115,10 +1402,12 @@
             if (!g) return toast('No se encontró el gasto');
 
             currentGastoEditId = id;
+            esMontoUSManual = true;
             document.getElementById('g-fecha').value = g.fecha || '';
             document.getElementById('g-categoria').value = g.categoria || 'Otros';
-            document.getElementById('g-moneda').value = g.moneda || 'AR$';
+            if (g.moneda) document.getElementById('g-moneda').value = g.moneda;
             document.getElementById('g-monto').value = g.monto != null ? g.monto : '';
+            document.getElementById('g-monto-us').value = g.montoUS != null ? g.montoUS : '';
             document.getElementById('g-metodo').value = g.metodo || 'Tarjeta';
             document.getElementById('g-detalle').value = g.detalle || '';
 
@@ -1137,7 +1426,8 @@
                 cb.checked = invol.length === 0 ? true : invol.includes(cb.value);
             });
 
-            document.getElementById('gasto-form-titulo').textContent = '✏️ Editando gasto';
+            document.getElementById('gasto-form-titulo-texto').textContent = '✏️ Editando gasto';
+            document.getElementById('gasto-scanner-btn').classList.add('hidden');
             document.getElementById('btn-guardar-gasto').textContent = 'Guardar cambios';
             document.getElementById('btn-guardar-gasto').classList.remove('bg-gray-800');
             document.getElementById('btn-guardar-gasto').classList.add('bg-amber-600', 'hover:bg-amber-700');
@@ -1153,7 +1443,7 @@
             if (FIREBASE_AVAILABLE && navigator.onLine) {
                 try {
                     const snap = await withTimeout(getRef('gastos').orderByChild('fecha').once('value'));
-                    snap.forEach(c => { arr.push({ id: c.key, ...c.val() }); });
+                    snap.forEach(c => { arr.push({ ...c.val(), id: c.key }); });
                     cacheCollection(currentViajeId, 'gastos', arr);
                 } catch (e) {
                     arr = cache.gastos || [];
@@ -1163,8 +1453,6 @@
             }
 
             arr = mergeQueued(arr, 'gastos');
-            // Más reciente arriba: por fecha del gasto (desc), y dentro del mismo día
-            // por momento de registro (timestamp desc; si falta, el id de Firebase es cronológico)
             arr.sort((a, b) =>
                 (b.fecha || '').localeCompare(a.fecha || '') ||
                 ((Number(b.timestamp) || 0) - (Number(a.timestamp) || 0)) ||
@@ -1177,20 +1465,26 @@
             document.getElementById('lista-gastos-admin').innerHTML = arr.length ? arr.map(d => {
                 const invol = Array.isArray(d.involucrados) ? d.involucrados.join(', ') : '';
                 const editing = currentGastoEditId === d.id;
+                const origVal = d.monedaOrigen || monedaOrigen;
+                const valUS = d.montoUS != null ? d.montoUS : '—';
+                const valOrig = d.montoOrigen != null ? d.montoOrigen : '—';
+
                 return `
                 <tr class="border-b ${editing ? 'bg-amber-50' : ''}">
                     <td class="py-2 pr-2 whitespace-nowrap">${escapeHtml(d.fecha)}</td>
                     <td class="pr-2">${escapeHtml(d.categoria)}</td>
-                    <td class="pr-2 max-w-[12rem] truncate" title="${escapeHtml(d.detalle || '')}">${escapeHtml(d.detalle || '—')}</td>
+                    <td class="pr-2 max-w-[10rem] truncate" title="${escapeHtml(d.detalle || '')}">${escapeHtml(d.detalle || '—')}</td>
                     <td class="pr-2"><span class="bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded font-bold">${escapeHtml(d.pagador || 'N/A')}</span></td>
                     <td class="pr-2 text-xs text-gray-600">${escapeHtml(invol || '—')}</td>
-                    <td class="pr-2 whitespace-nowrap">${escapeHtml(d.moneda)} ${escapeHtml(d.monto)} <span class="text-gray-400">(${escapeHtml(d.metodo)})</span></td>
+                    <td class="pr-2 whitespace-nowrap font-medium">${escapeHtml(d.moneda)} ${escapeHtml(d.monto)} <span class="text-gray-400 text-xs">(${escapeHtml(d.metodo)})</span></td>
+                    <td class="pr-2 whitespace-nowrap font-bold text-amber-700">US$ ${escapeHtml(valUS)}</td>
+                    <td class="pr-2 whitespace-nowrap text-emerald-700 font-medium">${escapeHtml(origVal)} ${escapeHtml(valOrig)}</td>
                     <td class="whitespace-nowrap text-right">
                         <button onclick="editarGasto('${d.id}')" class="text-blue-600 bg-blue-50 px-2 py-1 rounded text-xs font-bold mr-1 hover:bg-blue-100">Editar</button>
                         <button onclick="eliminarGasto('${d.id}')" class="text-red-600 bg-red-50 px-2 py-1 rounded text-xs font-bold hover:bg-red-100">Borrar</button>
                     </td>
                 </tr>`;
-            }).join('') : '<tr><td colspan="7" class="py-4 text-gray-400 italic">No hay gastos registrados.</td></tr>';
+            }).join('') : '<tr><td colspan="9" class="py-4 text-gray-400 italic">No hay gastos registrados.</td></tr>';
         }
 
         async function eliminarGasto(id) {
@@ -1208,5 +1502,5 @@
         // Inicializar app
         initAdminGlobal().then(() => actualizarBadgeComentarios());
     </script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a34e72f27c4c11e8',t:'MTc4ODM3MjM5MA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>

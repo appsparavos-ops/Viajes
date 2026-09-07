@@ -1,0 +1,23 @@
+{
+  "name": "Ticket Scanner — Gasto Rápido",
+  "short_name": "Ticket Scanner",
+  "description": "Tomá una foto del ticket, analizá el gasto y guardalo. Funciona online con Firebase y offline con sincronización automática.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#faf8f5",
+  "theme_color": "#b45309",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='192' height='192' viewBox='0 0 24 24' fill='none' stroke='%23b45309' stroke-width='2'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Cpath d='M9 14l6-6'/%3E%3Cpath d='M15 14l-6-6'/%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='512' height='512' viewBox='0 0 24 24' fill='none' stroke='%23b45309' stroke-width='2'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Cpath d='M9 14l6-6'/%3E%3Cpath d='M15 14l-6-6'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ],
+  "scope": ".",
+  "related_applications": []
+}

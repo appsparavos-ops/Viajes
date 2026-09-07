@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Ticket Scanner — Gasto Rápido</title>
+  <meta name="theme-color" content="#b45309">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <script src="lib/tailwindcss.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            display: ['"Outfit"', 'sans-serif'],
+            body: ['"Inter"', 'sans-serif'],
+          },
+          colors: {
+            amber: {
+              950: '#451a03',
+              900: '#78350f',
+              800: '#92400e',
+              700: '#b45309',
+              600: '#d97706',
+              500: '#f59e0b',
+              400: '#fbbf24',
+            },
+            ink: '#0f172a',
+            surface: '#faf8f5',
+            paper: '#ffffff',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    html { scroll-behavior: smooth; -webkit-tap-highlight-color: transparent; }
+    body { font-family: 'Inter', sans-serif; background: #faf8f5; color: #0f172a; }
+    .glass {
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(14px) saturate(140%);
+      -webkit-backdrop-filter: blur(14px) saturate(140%);
+    }
+    .scan-ring {
+      box-shadow: 0 0 0 6px rgba(217,119,6,0.15), 0 0 40px rgba(217,119,6,0.25);
+      animation: breathe 2.4s ease-in-out infinite;
+    }
+    @keyframes breathe {
+      0%, 100% { box-shadow: 0 0 0 6px rgba(217,119,6,0.15), 0 0 40px rgba(217,119,6,0.2); }
+      50% { box-shadow: 0 0 0 10px rgba(217,119,6,0.25), 0 0 60px rgba(217,119,6,0.35); }
+    }
+    .fade-up {
+      animation: fadeUp 0.7s ease-out both;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    /* Oculta scrollbar visual pero mantiene funcionalidad */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+
+  <!-- Firebase SDK -->
+  <script src="lib/firebase-app-compat.js"></script>
+  <script src="lib/firebase-database-compat.js"></script>
+  <script src="firebase-config.js"></script>
+
+  <!-- Tesseract.js (CDN) -->
+  <script src="lib/tesseract.min.js"></script>
+
+  <script>
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+      navigator.serviceWorker.register('./sw.js', { scope: '.' })
+        .then(reg => console.info('[TicketScanner] Service Worker registrado:', reg.scope))
+        .catch(err => console.warn('SW error:', err));
+    } else if ('serviceWorker' in navigator && location.protocol === 'file:') {
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        regs.forEach(r => r.unregister());
+      });
+    }
+  </script>
+</head>
+
+<body class="min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="sticky top-0 z-40 glass border-b border-amber-100/60">
+    <div class="max-w-md mx-auto px-5 h-16 flex items-center justify-between">
+      <a href="#" onclick="resetApp(); return false;" class="flex items-center gap-2.5 group" aria-label="Inicio">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-600 to-amber-400 text-white flex items-center justify-center shadow-md shadow-amber-200 group-hover:shadow-amber-300 transition">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 14l6-6"/><path d="M15 14l-6-6"/></svg>
+        </div>
+        <div class="leading-tight">
+          <h1 class="font-display font-extrabold text-[15px] tracking-tight text-ink">Ticket Scanner</h1>
+          <span class="text-[10px] text-amber-700 font-medium tracking-wide uppercase">Gasto rápido</span>
+        </div>
+        <a href="viaje-admin.html" class="text-[11px] bg-white/90 text-ink px-3 py-1 rounded-full font-bold shadow hover:bg-white transition border border-amber-200/60" aria-label="Volver a admin">← Admin</a>
+      </a>
+      <div class="flex items-center gap-2">
+        <span id="status-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_0_3px_rgba(52,211,153,0.3)]"></span>
+        <span id="status-text" class="text-[11px] font-semibold text-ink">En línea</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-md mx-auto w-full px-5 pt-6 pb-12 space-y-8">
+
+    <!-- Selector de viaje -->
+    <section aria-label="Seleccionar viaje" class="fade-up">
+      <label for="viaje-select" class="block text-[11px] font-bold uppercase tracking-wider text-amber-700 mb-2">Viaje activo</label>
+      <div class="relative">
+        <select id="viaje-select" onchange="onViajeChange(this.value)" class="w-full appearance-none bg-white border border-amber-200/80 rounded-2xl px-4 py-3.5 text-sm font-medium text-ink shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-200 focus:border-amber-300 transition">
+          <option value="" disabled>Cargando viajes…</option>
+        </select>
+        <span class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-amber-600">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </span>
+      </div>
+      <p id="viaje-desc" class="mt-2 text-[11px] text-gray-500 leading-relaxed">Seleccioná un viaje para guardar el gasto en sus rutas de Firebase.</p>
+    </section>
+
+    <!-- Cámara / archivo -->
+    <section aria-label="Capturar ticket" class="fade-up">
+      <div class="relative rounded-3xl overflow-hidden shadow-xl shadow-amber-900/10 bg-gradient-to-br from-amber-900 via-amber-950 to-ink">
+        <div class="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'0.03\'%3E%3Cpath d=\'M36 34v-4h-2v4h-2v2h2v4h2v-4h2v-2h-2zm0-30V0h-2v4h-2v2h2v4h2V6h2V4h-2zM6 34v-4H4v4H2v2h2v4h2v-4h2v-2H6zM6 4V0H4v4H2v2h2v4h2V6h2V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-60"></div>
+        <div class="relative px-6 py-8 text-center">
+          <h2 class="font-display font-extrabold text-xl text-white tracking-tight">Tomá una foto del ticket</h2>
+          <p class="text-amber-100/80 text-sm mt-1.5">El análisis ocurre en tu dispositivo. Nada se envía a servidores de OCR.</p>
+
+          <div class="mt-6 flex flex-col items-center gap-4">
+            <button onclick="startCamera()" class="group relative inline-flex items-center gap-2.5 bg-white/95 hover:bg-white text-ink px-7 py-3.5 rounded-2xl font-display font-bold text-sm shadow-lg shadow-black/10 hover:shadow-xl hover:-translate-y-0.5 transition" aria-label="Usar cámara">
+              <span class="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-amber-400 text-white flex items-center justify-center shadow-md">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              </span>
+              <span>Cámara</span>
+            </button>
+            <label class="cursor-pointer inline-flex items-center gap-2 text-amber-200 hover:text-white text-xs font-medium underline underline-offset-2 transition" aria-label="Seleccionar archivo">
+              <input type="file" accept="image/*" capture="environment" onchange="onFileSelect(this)" class="hidden" id="file-input">
+              <span onclick="document.getElementById('file-input').click()">o elegí una foto de tu galería</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Preview / OCR -->
+    <section id="preview-section" aria-label="Resultado del análisis" class="hidden fade-up">
+      <div class="bg-white rounded-3xl shadow-xl shadow-amber-900/5 border border-amber-100/40 overflow-hidden">
+        <div class="relative">
+          <img id="preview-img" src="" alt="Ticket capturado" class="w-full h-60 object-cover">
+          <div id="ocr-loader" class="absolute inset-0 bg-ink/60 backdrop-blur-sm flex flex-col items-center justify-center gap-3">
+            <div class="w-10 h-10 border-4 border-amber-300/30 border-t-amber-400 rounded-full animate-spin"></div>
+            <span class="text-white text-sm font-semibold">Analizando ticket…</span>
+          </div>
+        </div>
+        <div class="p-5 space-y-4">
+          <h3 class="font-display font-extrabold text-lg text-ink">Datos extraídos</h3>
+
+          <!-- División de gastos -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 p-4 bg-amber-50/60 rounded-2xl border border-amber-100">
+            <label class="block">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-amber-700">¿Quién pagó?</span>
+              <select id="g-pagador" class="mt-1 w-full bg-white border border-amber-200 rounded-xl px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber-200">
+                <option value="">(Configurá viajeros en el admin)</option>
+              </select>
+            </label>
+            <label class="block">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-amber-700">¿Para quiénes fue el gasto?</span>
+              <div id="g-involucrados" class="mt-2 flex flex-wrap gap-2">
+                <span class="text-[11px] text-gray-400 italic">Configurá los viajeros en viaje-admin.html</span>
+              </div>
+            </label>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <label class="block">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-amber-600">Monto</span>
+              <input type="text" id="field-monto" class="mt-1 w-full bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-amber-200" placeholder="Ej: 1250.00">
+            </label>
+            <label class="block">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-amber-600">Fecha</span>
+              <input type="date" id="field-fecha" class="mt-1 w-full bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-sm font-bold text-ink focus:outline-none focus:ring-2 focus:ring-amber-200">
+            </label>
+            <label class="block col-span-2">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-amber-600">Detalle / Concepto</span>
+              <input type="text" id="field-detalle" class="mt-1 w-full bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber-200" placeholder="Ej: Almuerzo, combustible…">
+            </label>
+            <label class="block">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-amber-600">Categoría</span>
+              <select id="field-categoria" class="mt-1 w-full bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber-200">
+                <option>Combustible</option><option>Hoteleria</option><option>Excursiones</option><option>Alimentacion</option><option>Otros</option>
+              </select>
+            </label>
+            <label class="block">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-amber-600">Moneda</span>
+              <select id="field-moneda" class="mt-1 w-full bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber-200">
+                <option>AR$</option><option>US$</option><option>UY$</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="pt-2">
+            <button onclick="guardarGasto()" id="btn-guardar" class="w-full bg-gradient-to-r from-amber-700 to-amber-600 hover:from-amber-600 hover:to-amber-500 text-white font-display font-extrabold text-sm py-3.5 rounded-2xl shadow-lg shadow-amber-200 hover:shadow-amber-300 hover:-translate-y-0.5 transition active:scale-[0.99]">
+              Guardar gasto
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Historial de gastos (últimos del viaje) -->
+    <section aria-label="Últimos gastos" class="fade-up">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-display font-extrabold text-base text-ink">Últimos gastos</h3>
+        <button onclick="cargarGastos()" class="text-[11px] font-bold text-amber-700 hover:text-amber-900 underline underline-offset-2 transition">Actualizar</button>
+      </div>
+      <div id="lista-gastos" class="space-y-2.5 max-h-[32rem] overflow-y-auto"></div>
+    </section>
+
+    <!-- Banner offline -->
+    <section id="offline-banner" class="hidden fade-up" aria-label="Estado sin conexión">
+      <div class="bg-gradient-to-r from-amber-800 to-amber-900 rounded-2xl px-5 py-4 shadow-lg shadow-amber-900/10 text-white flex items-start gap-3">
+        <span class="text-xl leading-none mt-0.5">📵</span>
+        <div>
+          <h4 class="font-display font-extrabold text-sm">Modo sin conexión</h4>
+          <p class="text-amber-100/80 text-xs mt-1 leading-relaxed">Los datos se guardan localmente y se sincronizan automáticamente cuando vuelvas a estar en línea.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Toast -->
+  <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-ink/95 text-white text-sm font-medium px-5 py-3 rounded-2xl shadow-2xl opacity-0 pointer-events-none transition-opacity duration-300 z-50 max-w-[92vw] text-center" role="status"></div>
+
+  <script src="app.js"></script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a34efcb62cad8bc1',t:'MTc4ODM3ODAzMw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
