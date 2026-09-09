@@ -46,9 +46,19 @@
             </h1>
             <div class="w-24 h-1 bg-amber-600 mx-auto mt-8 mb-6"></div>
             <p id="subtitulo" class="text-gray-500 italic text-xl font-serif">Preparando el viaje...</p>
-            <div id="selector-viajes-container" class="mt-4 hidden">
-                <select id="select-viaje-publico" onchange="cambiarViajePublico(this.value)" class="bg-transparent border border-gray-300 text-gray-500 text-sm rounded px-3 py-1 font-serif focus:outline-none focus:border-gray-500 text-center text-center-last">
-                </select>
+            <div id="selector-viajes-container" class="mt-6 hidden flex flex-wrap items-center justify-center gap-3">
+                <div class="inline-flex items-center gap-1.5 bg-gray-50/90 border border-gray-300 rounded-lg px-3 py-1.5 shadow-sm">
+                    <span class="text-xs font-bold text-amber-800 uppercase tracking-wider">👤 Viajero:</span>
+                    <select id="select-usuario-publico" onchange="cambiarUsuarioPublico(this.value)" class="bg-transparent text-gray-800 text-sm font-serif font-bold focus:outline-none cursor-pointer">
+                        <option value="">Cargando viajeros...</option>
+                    </select>
+                </div>
+                <div id="trip-selector-wrapper" class="inline-flex items-center gap-1.5 bg-gray-50/90 border border-gray-300 rounded-lg px-3 py-1.5 shadow-sm">
+                    <span class="text-xs font-bold text-amber-800 uppercase tracking-wider">🗺️ Viaje:</span>
+                    <select id="select-viaje-publico" onchange="cambiarViajePublico(this.value)" class="bg-transparent text-gray-800 text-sm font-serif focus:outline-none cursor-pointer">
+                        <option value="">Cargando viajes...</option>
+                    </select>
+                </div>
             </div>
         </div>
     </header>
@@ -109,46 +119,125 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
+        let currentUsername = null;
         let currentViajeId = null;
         
         function getRef(path) {
-            return db.ref(`viajes_data/${currentViajeId}/${path}`);
+            return db.ref(`${currentUsername}/viajes_data/${currentViajeId}/${path}`);
+        }
+
+        /* ---- URLs de entrega optimizadas (Cloudinary) ----
+           Entrega formato automático (WebP/AVIF) + calidad automática + ancho según
+           uso: las visitas descargan solo lo que se ve, no el archivo original. */
+        function cldUrl(url, params) {
+            if (!url || typeof url !== 'string') return url;
+            const seg = '/image/upload/';
+            const idx = url.indexOf(seg);
+            if (idx === -1) return url;
+            return url.slice(0, idx + seg.length) + params + '/' + url.slice(idx + seg.length);
+        }
+
+        function fotoUrl(url, ancho) {
+            return cldUrl(url, 'f_auto,q_auto,w_' + ancho);
         }
 
         async function initPublicApp() {
-            const snap = await db.ref('viajes_index').once('value');
-            if(!snap.exists()) {
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlUser = urlParams.get('user');
+            const urlId = urlParams.get('id');
+
+            // 1) Leer usuarios registrados de Firebase (/usernames)
+            let usuarios = [];
+            try {
+                const snapUsers = await db.ref('usernames').once('value');
+                if (snapUsers.exists()) {
+                    snapUsers.forEach(child => {
+                        const val = child.val();
+                        usuarios.push({
+                            username: child.key,
+                            displayName: (val && val.displayName) || child.key,
+                            ...(typeof val === 'object' ? val : {})
+                        });
+                    });
+                }
+            } catch (e) {
+                console.warn('Error al cargar índice de usuarios:', e);
+            }
+
+            // Si hay un usuario en la URL y no figura en la lista descargada, agregarlo
+            if (urlUser && !usuarios.find(u => u.username.toLowerCase() === urlUser.toLowerCase())) {
+                usuarios.unshift({ username: urlUser, displayName: urlUser });
+            }
+
+            if (usuarios.length === 0) {
                 document.getElementById('subtitulo').textContent = 'Próximamente...';
                 document.getElementById('nav-dias').innerHTML = '';
-                document.getElementById('main-content').innerHTML = '<p class="text-center text-gray-400 italic">No hay viajes publicados aún.</p>';
+                document.getElementById('main-content').innerHTML = '<p class="text-center text-gray-400 italic py-16 font-serif text-lg">No hay bitácoras de viaje publicadas aún.</p>';
                 return;
             }
-            
-            let viajes = [];
-            snap.forEach(c => { viajes.push({ ...c.val(), id: c.key }); });
-            viajes.sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
-            
-            const urlParams = new URLSearchParams(window.location.search);
-            const urlId = urlParams.get('id');
-            
-            if (urlId && viajes.find(v => v.id === urlId)) {
-                currentViajeId = urlId;
+
+            // 2) Determinar usuario activo
+            if (urlUser) {
+                const found = usuarios.find(u => u.username.toLowerCase() === urlUser.toLowerCase());
+                currentUsername = found ? found.username : urlUser;
             } else {
-                const activo = viajes.find(v => v.activo) || viajes[0];
-                currentViajeId = activo.id;
+                currentUsername = usuarios[0].username;
             }
 
-            if (viajes.length > 1) {
-                const selector = document.getElementById('select-viaje-publico');
-                selector.innerHTML = viajes.map(v => `<option value="${v.id}" ${v.id === currentViajeId ? 'selected' : ''}>${v.titulo}</option>`).join('');
-                document.getElementById('selector-viajes-container').classList.remove('hidden');
-            }
+            // 3) Poblar selector de usuarios
+            const userSelector = document.getElementById('select-usuario-publico');
+            userSelector.innerHTML = usuarios.map(u => 
+                `<option value="${u.username}" ${u.username.toLowerCase() === currentUsername.toLowerCase() ? 'selected' : ''}>@${u.username}</option>`
+            ).join('');
 
-            cargarDias();
+            document.getElementById('selector-viajes-container').classList.remove('hidden');
+
+            // 4) Cargar los viajes del usuario seleccionado
+            await cargarViajesUsuario(currentUsername, urlId);
+        }
+
+        async function cargarViajesUsuario(username, preferredTripId = null) {
+            currentUsername = username;
+            const tripSelector = document.getElementById('select-viaje-publico');
+
+            try {
+                const snap = await db.ref(`${currentUsername}/viajes_index`).once('value');
+                if (!snap.exists()) {
+                    tripSelector.innerHTML = '<option value="">(Sin viajes registrados)</option>';
+                    document.getElementById('subtitulo').textContent = `Viajes de @${currentUsername}`;
+                    document.getElementById('nav-dias').innerHTML = '';
+                    document.getElementById('main-content').innerHTML = `<p class="text-center text-gray-400 italic py-16 font-serif text-lg">@${currentUsername} aún no tiene viajes publicados.</p>`;
+                    return;
+                }
+
+                let viajes = [];
+                snap.forEach(c => { viajes.push({ ...c.val(), id: c.key }); });
+                viajes.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+                if (preferredTripId && viajes.find(v => v.id === preferredTripId)) {
+                    currentViajeId = preferredTripId;
+                } else {
+                    const activo = viajes.find(v => v.activo) || viajes[0];
+                    currentViajeId = activo ? activo.id : null;
+                }
+
+                tripSelector.innerHTML = viajes.map(v => 
+                    `<option value="${v.id}" ${v.id === currentViajeId ? 'selected' : ''}>${v.titulo}</option>`
+                ).join('');
+
+                cargarDias();
+            } catch (err) {
+                console.error('Error al cargar viajes del usuario:', err);
+                document.getElementById('main-content').innerHTML = '<p class="text-center text-red-500 py-16 font-serif text-lg">Error al conectar con Firebase.</p>';
+            }
+        }
+
+        function cambiarUsuarioPublico(username) {
+            window.location.href = `?user=${encodeURIComponent(username)}`;
         }
 
         function cambiarViajePublico(id) {
-            window.location.href = `?id=${id}`;
+            window.location.href = `?user=${encodeURIComponent(currentUsername)}&id=${encodeURIComponent(id)}`;
         }
 
         let currentPhotos = [];
@@ -159,7 +248,7 @@
             const url = typeof photo === 'string' ? photo : photo.url;
             const desc = typeof photo === 'string' ? '' : (photo.descripcion || '');
             
-            document.getElementById('lightbox-img').src = url;
+            document.getElementById('lightbox-img').src = fotoUrl(url, 1920);
             let captionText = `FOTO ${currentPhotoIndex + 1} DE ${currentPhotos.length}`;
             if (desc) {
                 captionText = `<span class="block text-lg mb-1">${desc}</span>` + captionText;
@@ -239,7 +328,7 @@
                     const desc = f.descripcion ? `<p class="text-sm font-serif mt-2">${f.descripcion}</p>` : '';
                     return `
                     <div class="mb-4 break-inside-avoid relative group cursor-pointer" onclick="openLightbox(allTripPhotos, allTripPhotos.indexOf(fotosAMostrar[${i}]))">
-                        <img src="${f.url}" class="w-full rounded bg-gray-100 hover:opacity-90 transition">
+                        <img src="${fotoUrl(f.url, 900)}" class="w-full rounded bg-gray-100 hover:opacity-90 transition">
                         <div class="mt-1">
                             ${!filtroDia ? `<span class="text-xs font-bold text-amber-700 uppercase">Día ${f.diaNumero} &bull; ${f.diaDestino}</span>` : ''}
                             ${desc}
@@ -279,9 +368,10 @@
             if (fotos.length > 0) {
                 // Foto Hero (La primera)
                 const heroUrl = typeof fotos[0] === 'string' ? fotos[0] : fotos[0].url;
+                const heroUrlDisplay = fotoUrl(heroUrl, 1600);
                 mainPhotoHtml = `
                 <div class="relative group overflow-hidden bg-gray-100 h-[500px] md:h-[700px] cursor-pointer" onclick="openLightbox(${JSON.stringify(fotos).replace(/"/g, '&quot;')}, 0)">
-                    <img src="${heroUrl}" alt="Foto principal día ${d.numero}" class="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105">
+                    <img src="${heroUrlDisplay}" alt="Foto principal día ${d.numero}" class="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105">
                 </div>`;
                 
                 // Resto de fotos en pequeña grilla
@@ -293,7 +383,7 @@
                             const u = typeof f === 'string' ? f : f.url;
                             return `
                             <div class="relative h-32 md:h-40 overflow-hidden cursor-pointer bg-gray-100 group" onclick="openLightbox(${JSON.stringify(fotos).replace(/"/g, '&quot;')}, ${i+1})">
-                                <img src="${u}" class="w-full h-full object-cover transition-all duration-500 group-hover:opacity-75 group-hover:scale-110">
+                                <img src="${fotoUrl(u, 700)}" class="w-full h-full object-cover transition-all duration-500 group-hover:opacity-75 group-hover:scale-110">
                             </div>`;
                         }).join('')}
                     </div>`;
@@ -413,5 +503,5 @@
 
         initPublicApp();
     </script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a38805577edc1eba',t:'MTc4ODk3NjA3NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>

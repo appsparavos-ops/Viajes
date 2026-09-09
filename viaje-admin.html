@@ -14,9 +14,19 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         .foto-preview { position: relative; }
         .foto-preview button { position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,0.6); color: white; border-radius: 50%; width: 22px; height: 22px; font-size: 14px; cursor: pointer; }
+        #auth-overlay.hidden, #boot-screen.hidden { display: none !important; }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen pb-12">
+
+    <!-- Pantalla de carga inicial: se muestra mientras Firebase resuelve qué mostrar
+         (login o panel). Evita que parpadeen la página y/o el modal de login. -->
+    <div id="boot-screen" class="fixed inset-0 bg-gray-100 z-[150] flex items-center justify-center">
+        <div class="text-center px-4">
+            <div class="spinner !w-10 !h-10 !border-4 mx-auto"></div>
+            <p class="text-sm font-bold text-amber-800 mt-4">Cargando Bitácora de Viaje…</p>
+        </div>
+    </div>
 
     <header class="bg-amber-800 text-white py-4 px-6 shadow-md flex items-center justify-between flex-wrap gap-4">
         <div>
@@ -28,14 +38,118 @@
                 <button onclick="nuevoViaje()" class="text-xs font-bold bg-amber-600 hover:bg-amber-500 px-3 py-1.5 rounded">➕ NUEVO VIAJE</button>
             </div>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 flex-wrap">
+            <div id="user-info-bar" class="hidden items-center gap-2 mr-2 bg-amber-900/80 border border-amber-700/60 px-3 py-1.5 rounded-xl">
+                <span class="text-xs font-bold text-amber-200 flex items-center gap-1">👤 <span id="current-user-name">...</span></span>
+                <button onclick="cerrarSesion()" title="Cerrar sesión" class="text-xs bg-amber-950 hover:bg-red-800 text-amber-200 hover:text-white px-2 py-0.5 rounded transition">Salir</button>
+            </div>
             <button onclick="SyncManager.sync()" id="btn-sync" class="text-sm bg-gray-600 hover:bg-gray-500 px-4 py-2 rounded-lg flex items-center gap-1 hidden">
                 <span>🔄 Sincronizar</span>
             </button>
-            <a href="presupuesto.html" target="_blank" class="text-sm bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg">💰 Presupuesto</a>
-            <a href="viaje.html" target="_blank" class="text-sm bg-amber-600 hover:bg-amber-500 px-4 py-2 rounded-lg">Ver bitácora →</a>
+            <a id="btn-presupuesto-link" href="presupuesto.html" class="text-sm bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg">💰 Presupuesto</a>
+            <a id="btn-ver-bitacora" href="viaje.html" target="_blank" class="text-sm bg-amber-600 hover:bg-amber-500 px-4 py-2 rounded-lg">Ver bitácora →</a>
         </div>
     </header>
+
+    <!-- Modal / Pantalla de Autenticación Multi-Usuario -->
+    <div id="auth-overlay" class="fixed inset-0 bg-gray-900/80 backdrop-blur-sm z-[100] hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-gray-100 animate-fade-in">
+            <!-- Auth Header -->
+            <div class="bg-gradient-to-r from-amber-700 to-amber-600 p-6 text-white text-center">
+                <h2 class="text-2xl font-bold font-serif">Bitácora de Viaje</h2>
+                <p class="text-amber-100 text-xs mt-1 uppercase tracking-wider">Acceso a Panel de Administración</p>
+            </div>
+
+            <!-- Vista 1: Login / Registro con Email o Google -->
+            <div id="auth-view-credentials" class="p-6">
+                <div class="flex border-b border-gray-200 mb-5">
+                    <button id="auth-tab-login" type="button" onclick="setAuthTab('login')" class="flex-1 pb-3 text-sm font-bold border-b-2 border-amber-600 text-amber-700">Iniciar Sesión</button>
+                    <button id="auth-tab-register" type="button" onclick="setAuthTab('register')" class="flex-1 pb-3 text-sm font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-700">Registrarse</button>
+                </div>
+
+                <!-- Botón Google -->
+                <button type="button" onclick="loginWithGoogle()" class="w-full mb-4 py-2.5 px-4 border border-gray-300 rounded-xl flex items-center justify-center gap-3 bg-white hover:bg-gray-50 text-gray-700 text-sm font-bold shadow-sm transition active:scale-95">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                    </svg>
+                    <span>Continuar con Google</span>
+                </button>
+
+                <div class="flex items-center my-4">
+                    <div class="flex-grow border-t border-gray-200"></div>
+                    <span class="px-3 text-xs text-gray-400 font-semibold uppercase">O con correo</span>
+                    <div class="flex-grow border-t border-gray-200"></div>
+                </div>
+
+                <!-- Formulario Email / Contraseña -->
+                <form id="form-auth" onsubmit="handleAuthSubmit(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">Correo electrónico</label>
+                        <input type="email" id="auth-email" required class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-600" placeholder="tu@email.com">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">Contraseña</label>
+                        <input type="password" id="auth-password" required minlength="6" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-600" placeholder="Mínimo 6 caracteres">
+                    </div>
+                    <div id="auth-confirm-group" class="hidden">
+                        <label class="block text-xs font-bold text-gray-700 mb-1">Confirmar contraseña</label>
+                        <input type="password" id="auth-password-confirm" minlength="6" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-600" placeholder="Repetir contraseña">
+                    </div>
+
+                    <div id="auth-error-msg" class="hidden text-xs text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-200 font-medium"></div>
+
+                    <button type="submit" id="auth-submit-btn" class="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-bold transition shadow-sm flex items-center justify-center gap-2">
+                        <span id="auth-btn-text">Iniciar Sesión</span>
+                        <span id="auth-spinner" class="spinner !w-4 !h-4 !border-2 !border-white !border-t-transparent hidden"></span>
+                    </button>
+
+                    <div class="text-center pt-2">
+                        <button type="button" onclick="recuperarPassword()" class="text-xs text-amber-700 hover:underline">¿Olvidaste tu contraseña?</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Vista 2: Elección de Nombre de Usuario Único (Firebase Root ID) -->
+            <div id="auth-view-username" class="p-6 hidden">
+                <div class="text-center mb-4">
+                    <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-amber-100 text-amber-800 text-xl font-bold mb-2">👤</div>
+                    <h3 class="text-lg font-bold text-gray-800">Elegí tu Nombre de Usuario</h3>
+                    <p class="text-xs text-gray-500 mt-1">
+                        Este nombre será tu <strong>identificador único en Firebase</strong> y la raíz donde se guardarán todos tus viajes y relatos.
+                    </p>
+                </div>
+
+                <form id="form-username" onsubmit="handleUsernameSubmit(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">Nombre de usuario deseado</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400 font-bold">@</span>
+                            <input type="text" id="input-username" required maxlength="25" oninput="onUsernameInput(this.value)" class="w-full border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:border-amber-600" placeholder="ejemplo: arturo_viajero">
+                        </div>
+                        <div id="username-feedback" class="text-[11px] mt-1.5 space-y-1">
+                            <p class="text-gray-500">
+                                Solo letras (a-z), números (0-9), guiones (-) y guiones bajos (_). Longitud: 3 a 25 caracteres.
+                            </p>
+                            <p id="username-preview" class="font-bold text-amber-700 hidden"></p>
+                            <p id="username-sanitized-notice" class="text-amber-600 italic hidden">
+                                ℹ️ Los caracteres especiales, espacios y acentos se normalizan automáticamente para ser 100% compatibles con Firebase.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div id="username-error-msg" class="hidden text-xs text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-200 font-medium"></div>
+
+                    <button type="submit" id="username-submit-btn" class="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-bold transition shadow-sm flex items-center justify-center gap-2">
+                        <span id="username-btn-text">Confirmar Nombre y Entrar</span>
+                        <span id="username-spinner" class="spinner !w-4 !h-4 !border-2 !border-white !border-t-transparent hidden"></span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
 
     <!-- Aviso de modo offline -->
     <div id="banner-offline" class="hidden bg-yellow-100 border-b border-yellow-300 text-yellow-800 text-sm px-6 py-2 flex items-center gap-2">
@@ -65,7 +179,11 @@
                 <div class="mb-6">
                     <label class="block text-sm font-medium text-gray-700 mb-2">Fotos</label>
                     <div id="fotos-preview" class="flex flex-wrap gap-2 mb-3"></div>
-                    <button type="button" id="btn-upload" class="px-4 py-2 border-2 border-dashed border-amber-400 text-amber-700 rounded-lg text-sm">📷 Subir fotos a Cloudinary</button>
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <input type="file" id="foto-file-input" accept="image/*" multiple class="hidden">
+                        <button type="button" id="btn-upload" class="px-4 py-2 border-2 border-dashed border-amber-400 text-amber-700 rounded-lg text-sm">📷 Subir fotos a Cloudinary</button>
+                        <span id="upload-status" class="hidden text-xs font-semibold text-amber-700 italic"></span>
+                    </div>
                 </div>
                 <div class="flex gap-3 items-center">
                     <button onclick="guardarDia()" class="px-6 py-2 bg-amber-600 text-white font-semibold rounded-lg hover:bg-amber-700">Guardar entrada</button>
@@ -96,7 +214,7 @@
         <div id="tab-finanzas" class="tab-content hidden space-y-6">
             <div class="flex justify-between items-center bg-white rounded-2xl shadow p-4 border-b-2 border-gray-100">
                 <h2 class="text-xl font-bold text-gray-800">Gestión de Gastos</h2>
-                <button onclick="document.getElementById('modal-config-viaje').classList.remove('hidden')" class="flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-bold transition">
+                <button onclick="abrirModalConfigViaje()" class="flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-bold transition">
                     <span>⚙️ Configuración del Viaje</span>
                 </button>
             </div>
@@ -262,35 +380,424 @@
     <div id="toast" class="fixed bottom-6 right-6 bg-gray-800 text-white px-5 py-3 rounded-xl hidden z-50 shadow-xl"></div>
 
     <script src="lib/firebase-app-compat.js"></script>
+    <script src="lib/firebase-auth-compat.js"></script>
     <script src="lib/firebase-database-compat.js"></script>
     <script src="firebase-config.js"></script>
 
     <script>
         /* ============================================================
-           Bitácora de Viaje — Admin (con respaldo OFFLINE robusto)
+           Bitácora de Viaje — Admin (con respaldo OFFLINE robusto y Multi-Usuario)
            ------------------------------------------------------------
-           Problema resuelto: cuando no hay internet real (aunque el
-           WebView diga "online"), Firebase quedaba esperando respuesta
-           y el título del viaje nunca cargaba, bloqueando relatos y
-           gastos.
-           Solución:
-            1. Todas las lecturas de Firebase tienen TIMEOUT; si el
-               servidor no responde, se usa la copia local del dispositivo.
-            2. Respaldo local (localStorage) de TODO lo importante:
-               viajes, días, gastos, configuración, cotizaciones y
-               comentarios.
-            3. Cola de sincronización: lo que se guarda sin internet se
-               sube automáticamente al volver la conexión.
+           Soporte multi-usuario con Firebase Auth (Email/Contraseña y Google).
+           Cada usuario cuenta con un nombre de usuario único que actúa como
+           raíz en Firebase Realtime Database: /{username}/...
            ============================================================ */
 
         const FIREBASE_AVAILABLE = typeof firebase !== 'undefined' && typeof firebaseConfig !== 'undefined';
 
         let db = null;
+        let auth = null;
         let isFirebaseConnected = false;
+        let authUser = null;
+        let currentUsername = localStorage.getItem('travelapp_active_user') || null;
+
+        function getUserRoot() {
+            return currentUsername || 'usuario_anonimo';
+        }
+
+        /* ---------------- Manejo de Caracteres Especiales e ID de Firebase ---------------- */
+        /**
+         * Normaliza y sanitiza cualquier cadena para que sea un ID válido y seguro en Firebase RTDB.
+         * En Firebase Realtime Database, los keys NO pueden contener: . $ # [ ] / ni caracteres ASCII de control (0-31, 127).
+         * Esta función:
+         * 1. Convierte a minúsculas y elimina espacios iniciales/finales.
+         * 2. Descompone y elimina acentos y diacríticos (ej: á->a, é->e, ó->o, ü->u).
+         * 3. Reemplaza la 'ñ' por 'n'.
+         * 4. Convierte espacios intermedios y puntos en guiones bajos (_).
+         * 5. Elimina de forma estricta cualquier símbolo prohibido (. $ # [ ] / y signos especiales).
+         * 6. Limita el tamaño a 25 caracteres.
+         */
+        function sanitizeUsername(input) {
+            if (!input) return '';
+            return input
+                .toLowerCase()
+                .trim()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "") // quita tildes
+                .replace(/ñ/g, 'n')
+                .replace(/[\s.]+/g, '_') // convierte espacios y puntos a _
+                .replace(/[^a-z0-9_-]/g, '') // filtra todo lo que no sea a-z, 0-9, _ o -
+                .slice(0, 25);
+        }
+
+        const RESERVED_USERNAMES = new Set(['usernames', 'users', 'viajes_index', 'viajes_data', 'admin', 'api', 'auth', 'null', 'undefined', 'root', 'config']);
+
+        function validateUsernameFormat(username) {
+            if (!username || username.length < 3) {
+                return 'El nombre de usuario debe tener al menos 3 caracteres.';
+            }
+            if (username.length > 25) {
+                return 'El nombre de usuario no puede superar los 25 caracteres.';
+            }
+            if (/[.$#[\]/]/.test(username)) {
+                return 'El nombre no puede contener caracteres no permitidos en Firebase (. $ # [ ] /).';
+            }
+            if (!/^[a-z0-9_-]+$/.test(username)) {
+                return 'Solo se permiten letras minúsculas (a-z), números (0-9), guiones (-) y guiones bajos (_).';
+            }
+            if (RESERVED_USERNAMES.has(username.toLowerCase())) {
+                return 'Este nombre de usuario está reservado para el sistema.';
+            }
+            return null;
+        }
+
+        function onUsernameInput(val) {
+            const sanitized = sanitizeUsername(val);
+            const previewEl = document.getElementById('username-preview');
+            const noticeEl = document.getElementById('username-sanitized-notice');
+            const errorEl = document.getElementById('username-error-msg');
+            if (errorEl) errorEl.classList.add('hidden');
+
+            if (!val) {
+                if (previewEl) previewEl.classList.add('hidden');
+                if (noticeEl) noticeEl.classList.add('hidden');
+                return;
+            }
+
+            if (previewEl) {
+                previewEl.classList.remove('hidden');
+                previewEl.textContent = `ID en Firebase: @${sanitized || '...'}`;
+            }
+
+            if (noticeEl) {
+                if (val.trim().toLowerCase() !== sanitized) {
+                    noticeEl.classList.remove('hidden');
+                } else {
+                    noticeEl.classList.add('hidden');
+                }
+            }
+        }
+
+        /* ---------------- Control de Interfaz de Autenticación ---------------- */
+        let authCurrentTab = 'login';
+
+        function setAuthTab(tab) {
+            authCurrentTab = tab;
+            clearAuthError();
+            const tabLogin = document.getElementById('auth-tab-login');
+            const tabReg = document.getElementById('auth-tab-register');
+            const confirmGroup = document.getElementById('auth-confirm-group');
+            const btnText = document.getElementById('auth-btn-text');
+
+            if (tab === 'login') {
+                if (tabLogin) tabLogin.className = 'flex-1 pb-3 text-sm font-bold border-b-2 border-amber-600 text-amber-700';
+                if (tabReg) tabReg.className = 'flex-1 pb-3 text-sm font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-700';
+                if (confirmGroup) confirmGroup.classList.add('hidden');
+                if (btnText) btnText.textContent = 'Iniciar Sesión';
+            } else {
+                if (tabReg) tabReg.className = 'flex-1 pb-3 text-sm font-bold border-b-2 border-amber-600 text-amber-700';
+                if (tabLogin) tabLogin.className = 'flex-1 pb-3 text-sm font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-700';
+                if (confirmGroup) confirmGroup.classList.remove('hidden');
+                if (btnText) btnText.textContent = 'Registrarse';
+            }
+        }
+
+        function showAuthModal(view = 'credentials') {
+            // Si llegamos hasta acá es porque la decisión de sesión ya se tomó:
+            // ocultamos la pantalla de carga en el mismo instante en que se muestra
+            // el modal (sin parpadeos intermedios).
+            hideBootScreen();
+            const overlay = document.getElementById('auth-overlay');
+            const credView = document.getElementById('auth-view-credentials');
+            const userView = document.getElementById('auth-view-username');
+            if (!overlay) return;
+            overlay.classList.remove('hidden');
+            if (view === 'credentials') {
+                if (credView) credView.classList.remove('hidden');
+                if (userView) userView.classList.add('hidden');
+            } else {
+                if (credView) credView.classList.add('hidden');
+                if (userView) userView.classList.remove('hidden');
+                const userInp = document.getElementById('input-username');
+                if (userInp) {
+                    if (authUser && (authUser.displayName || authUser.email)) {
+                        const sug = sanitizeUsername(authUser.displayName || authUser.email.split('@')[0]);
+                        userInp.value = sug;
+                        onUsernameInput(sug);
+                    }
+                    setTimeout(() => userInp.focus(), 150);
+                }
+            }
+        }
+
+        function hideAuthModal() {
+            const overlay = document.getElementById('auth-overlay');
+            if (overlay) overlay.classList.add('hidden');
+        }
+
+        function hideBootScreen() {
+            const b = document.getElementById('boot-screen');
+            if (b) b.classList.add('hidden');
+        }
+
+        function tieneSesionGuardada() {
+            // Busca si existe un token de sesión Firebase en el almacenamiento de la
+            // pestaña (persistencia SESSION). Si existe, la sesión se está restaurando
+            // y hay que esperarla antes de pedir el login.
+            try {
+                for (let i = 0; i < sessionStorage.length; i++) {
+                    const k = sessionStorage.key(i);
+                    if (k && k.indexOf('firebase:authUser:') === 0) return true;
+                }
+            } catch (e) { /* ignorar */ }
+            return false;
+        }
+
+        function showAuthError(msg) {
+            const el = document.getElementById('auth-error-msg');
+            if (el) { el.textContent = msg; el.classList.remove('hidden'); }
+        }
+
+        function clearAuthError() {
+            const el = document.getElementById('auth-error-msg');
+            if (el) { el.textContent = ''; el.classList.add('hidden'); }
+            const uEl = document.getElementById('username-error-msg');
+            if (uEl) { uEl.textContent = ''; uEl.classList.add('hidden'); }
+        }
+
+        function showUsernameError(msg) {
+            const el = document.getElementById('username-error-msg');
+            if (el) { el.textContent = msg; el.classList.remove('hidden'); }
+        }
+
+        function setAuthLoading(loading) {
+            const btn = document.getElementById('auth-submit-btn');
+            const spinner = document.getElementById('auth-spinner');
+            if (btn) btn.disabled = loading;
+            if (spinner) spinner.classList.toggle('hidden', !loading);
+        }
+
+        function setUsernameLoading(loading) {
+            const btn = document.getElementById('username-submit-btn');
+            const spinner = document.getElementById('username-spinner');
+            if (btn) btn.disabled = loading;
+            if (spinner) spinner.classList.toggle('hidden', !loading);
+        }
+
+        function getAuthErrorMessage(error) {
+            if (!error) return 'Ocurrió un error inesperado.';
+            switch (error.code) {
+                case 'auth/user-not-found':
+                case 'auth/wrong-password':
+                case 'auth/invalid-credential':
+                    return 'Correo electrónico o contraseña incorrectos.';
+                case 'auth/email-already-in-use':
+                    return 'Este correo ya está registrado. Elegí "Iniciar Sesión".';
+                case 'auth/invalid-email':
+                    return 'El correo electrónico no es válido.';
+                case 'auth/weak-password':
+                    return 'La contraseña debe tener al menos 6 caracteres.';
+                case 'auth/popup-closed-by-user':
+                    return 'Se cerró la ventana de Google antes de completar la autenticación.';
+                case 'auth/network-request-failed':
+                    return 'Error de red. Verificá tu conexión a internet.';
+                default:
+                    return error.message || 'Error en la autenticación.';
+            }
+        }
+
+        async function handleAuthSubmit(e) {
+            e.preventDefault();
+            clearAuthError();
+            const email = document.getElementById('auth-email').value.trim();
+            const pass = document.getElementById('auth-password').value;
+            if (!email || !pass) return showAuthError('Completá todos los campos requeridos.');
+
+            setAuthLoading(true);
+            try {
+                if (authCurrentTab === 'login') {
+                    await firebase.auth().signInWithEmailAndPassword(email, pass);
+                } else {
+                    const passConf = document.getElementById('auth-password-confirm').value;
+                    if (pass !== passConf) {
+                        setAuthLoading(false);
+                        return showAuthError('Las contraseñas no coinciden.');
+                    }
+                    await firebase.auth().createUserWithEmailAndPassword(email, pass);
+                }
+            } catch (err) {
+                console.error(err);
+                showAuthError(getAuthErrorMessage(err));
+            } finally {
+                setAuthLoading(false);
+            }
+        }
+
+        async function loginWithGoogle() {
+            clearAuthError();
+            setAuthLoading(true);
+            const provider = new firebase.auth.GoogleAuthProvider();
+            provider.setCustomParameters({ prompt: 'select_account' });
+            try {
+                await firebase.auth().signInWithPopup(provider);
+            } catch (err) {
+                console.warn('Error signInWithPopup:', err);
+                if (err.code === 'auth/popup-blocked' || err.code === 'auth/operation-not-supported-in-this-environment') {
+                    try {
+                        await firebase.auth().signInWithRedirect(provider);
+                        return;
+                    } catch (redirErr) {
+                        showAuthError(getAuthErrorMessage(redirErr));
+                    }
+                } else {
+                    showAuthError(getAuthErrorMessage(err));
+                }
+            } finally {
+                setAuthLoading(false);
+            }
+        }
+
+        async function recuperarPassword() {
+            const email = prompt("Ingresá tu correo electrónico para restablecer la contraseña:");
+            if (!email) return;
+            try {
+                await firebase.auth().sendPasswordResetEmail(email.trim());
+                toast('Se envió un correo de restablecimiento.');
+            } catch (err) {
+                alert('No se pudo enviar el correo: ' + getAuthErrorMessage(err));
+            }
+        }
+
+        async function handleUsernameSubmit(e) {
+            e.preventDefault();
+            const rawVal = document.getElementById('input-username').value;
+            const cleanVal = sanitizeUsername(rawVal);
+            const err = validateUsernameFormat(cleanVal);
+            if (err) return showUsernameError(err);
+
+            if (!authUser || !authUser.uid) {
+                return showUsernameError('Error: No se detectó una sesión activa de autenticación.');
+            }
+
+            setUsernameLoading(true);
+            try {
+                // Verificar si ya existe este nombre de usuario en Firebase
+                const userSnap = await db.ref(`usernames/${cleanVal}`).once('value');
+                if (userSnap.exists() && userSnap.val().uid !== authUser.uid) {
+                    setUsernameLoading(false);
+                    return showUsernameError(`El nombre @${cleanVal} ya está en uso. Por favor elegí otro.`);
+                }
+
+                // Guardar mapeo en Firebase RTDB
+                const payload = {
+                    uid: authUser.uid,
+                    username: cleanVal,
+                    email: authUser.email || '',
+                    createdAt: firebase.database.ServerValue.TIMESTAMP
+                };
+
+                await db.ref(`usernames/${cleanVal}`).set(payload);
+                await db.ref(`users/${authUser.uid}`).set(payload);
+
+                currentUsername = cleanVal;
+                localStorage.setItem('travelapp_active_user', currentUsername);
+                toast(`¡Bienvenido @${currentUsername}!`);
+                onUserAuthenticated();
+            } catch (err) {
+                console.error(err);
+                showUsernameError('Error al registrar nombre de usuario: ' + (err.message || err));
+            } finally {
+                setUsernameLoading(false);
+            }
+        }
+
+        async function cerrarSesion() {
+            if (!confirm('¿Deseas cerrar tu sesión actual?')) return;
+            try {
+                if (auth && typeof auth.signOut === 'function') await auth.signOut();
+            } catch (e) {
+                console.error('Error al cerrar sesión en Firebase:', e);
+                // Limpieza de respaldo: si signOut falló, eliminar igualmente las
+                // credenciales locales de Firebase para que no se re-autentique al recargar.
+                try {
+                    const keysToRemove = [];
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const k = localStorage.key(i);
+                        if (k && k.indexOf('firebase:authUser:') === 0) keysToRemove.push(k);
+                    }
+                    keysToRemove.forEach(k => localStorage.removeItem(k));
+                } catch (e2) { console.error(e2); }
+            }
+            authUser = null;
+            currentUsername = null;
+            localStorage.removeItem('travelapp_active_user');
+            window.location.reload();
+        }
+
+        function updateNavigationLinks() {
+            const user = getUserRoot();
+            const bitacoraBtn = document.getElementById('btn-ver-bitacora');
+            if (bitacoraBtn) {
+                bitacoraBtn.href = `viaje.html?user=${encodeURIComponent(user)}${currentViajeId ? `&id=${encodeURIComponent(currentViajeId)}` : ''}`;
+            }
+            const presupuestoBtn = document.getElementById('btn-presupuesto-link');
+            if (presupuestoBtn) {
+                presupuestoBtn.href = `presupuesto.html?user=${encodeURIComponent(user)}${currentViajeId ? `&id=${encodeURIComponent(currentViajeId)}` : ''}`;
+            }
+            const scannerBtn = document.getElementById('gasto-scanner-btn');
+            if (scannerBtn) {
+                scannerBtn.href = `scanner.html?user=${encodeURIComponent(user)}${currentViajeId ? `&id=${encodeURIComponent(currentViajeId)}` : ''}`;
+            }
+        }
+
+        function onUserAuthenticated() {
+            hideBootScreen(); // sesión confirmada: revelamos el panel (sin parpadeos)
+            hideAuthModal();
+            const infoBar = document.getElementById('user-info-bar');
+            const nameEl = document.getElementById('current-user-name');
+            if (infoBar && nameEl) {
+                infoBar.classList.remove('hidden');
+                infoBar.classList.add('flex');
+                nameEl.textContent = `@${currentUsername}`;
+            }
+            SyncManager.loadQueue();
+            updateNavigationLinks();
+            initAdminGlobal().then(() => actualizarBadgeComentarios());
+        }
+
         if (FIREBASE_AVAILABLE) {
             try {
                 firebase.initializeApp(firebaseConfig);
                 db = firebase.database();
+                auth = firebase.auth();
+
+                // ---- Política de sesión: dura lo que dura la pestaña ----
+                // 1) Borrar tokens de persistencia LOCAL (claves firebase:authUser:* en
+                //    localStorage) que dejaron versiones anteriores con "recordarme
+                //    siempre". Si no se limpian, la sesión sobreviviría al cierre de la
+                //    pestaña/navegador. Se hace antes de restaurar el estado de auth para
+                //    evitar que se vuelva a autenticar desde localStorage.
+                try {
+                    const staleKeys = [];
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const k = localStorage.key(i);
+                        if (k && k.indexOf('firebase:authUser:') === 0) staleKeys.push(k);
+                    }
+                    staleKeys.forEach(k => localStorage.removeItem(k));
+                } catch (e) {
+                    console.warn('No se pudieron limpiar tokens de sesión locales:', e);
+                }
+
+                // 2) Persistencia SESSION: la sesión sobrevive a recargas y a la
+                //    navegación admin <-> presupuesto dentro de la misma pestaña, pero
+                //    se descarta al cerrar la pestaña o el navegador.
+                try {
+                    auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(err =>
+                        console.warn('No se pudo fijar persistencia SESSION:', err)
+                    );
+                } catch (e) {
+                    console.warn('Error configurando persistencia SESSION:', e);
+                }
             } catch (e) {
                 console.warn('Error inicializando Firebase:', e);
             }
@@ -304,13 +811,14 @@
 
         const TIMEOUT_MS = 12000; // segundos de espera máxima a Firebase
 
+        // Claves de caché dinámicas aisladas por usuario
         const CACHE = {
-            viajes: 'travelapp_viajes_cache',
-            lastViajeId: 'travelapp_last_viaje_id',
-            lastViaje: 'travelapp_last_viaje',
-            syncQueue: 'travelapp_syncQueue',
-            viajeData: id => 'travelapp_viajedata_' + id,
-            diasLegacy: id => 'travelapp_dias_' + id   // caché vieja, se migra automáticamente
+            get viajes() { return 'travelapp_' + getUserRoot() + '_viajes_cache'; },
+            get lastViajeId() { return 'travelapp_' + getUserRoot() + '_last_viaje_id'; },
+            get lastViaje() { return 'travelapp_' + getUserRoot() + '_last_viaje'; },
+            get syncQueue() { return 'travelapp_' + getUserRoot() + '_syncQueue'; },
+            viajeData: id => 'travelapp_' + getUserRoot() + '_viajedata_' + id,
+            diasLegacy: id => 'travelapp_' + getUserRoot() + '_dias_' + id
         };
 
         /* ---------------- Utilidades ---------------- */
@@ -388,7 +896,7 @@
         function getRef(path) {
             if (!currentViajeId) { toast('Error: Seleccioná un viaje'); throw new Error('No trip selected'); }
             if (!db) throw new Error('Firebase no disponible');
-            return db.ref(`viajes_data/${currentViajeId}/${path}`);
+            return db.ref(`${getUserRoot()}/viajes_data/${currentViajeId}/${path}`);
         }
 
         /* ---------------- Caché por viaje (respaldo en el dispositivo) ---------------- */
@@ -464,6 +972,11 @@
         const SyncManager = {
             queue: getCache(CACHE.syncQueue) || [],
 
+            loadQueue() {
+                this.queue = getCache(CACHE.syncQueue) || [];
+                this.updateUI();
+            },
+
             saveQueue() {
                 setCache(CACHE.syncQueue, this.queue);
                 this.updateUI();
@@ -492,7 +1005,7 @@
                 let wrote = false;
                 if (FIREBASE_AVAILABLE && checkIsOnline()) {
                     try {
-                        const ref = isGlobal ? db.ref(path) : getRef(path);
+                        const ref = isGlobal ? db.ref(`${getUserRoot()}/${path}`) : getRef(path);
                         await withTimeout((async () => {
                             if (action === 'push') {
                                 await ref.child(generatedId).set(normalizeTimestamps(deepClone(sanitizedData), 'server'));
@@ -577,7 +1090,7 @@
                 try {
                     for (let i = 0; i < this.queue.length; i++) {
                         const op = this.queue[i];
-                        let ref = op.isGlobal ? db.ref(op.path) : db.ref(`viajes_data/${op.viajeId}/${op.path}`);
+                        let ref = op.isGlobal ? db.ref(`${getUserRoot()}/${op.path}`) : db.ref(`${getUserRoot()}/viajes_data/${op.viajeId}/${op.path}`);
                         const payload = (op.data && typeof op.data === 'object' && !Array.isArray(op.data))
                             ? encodeObjectKeys(op.data)
                             : op.data;
@@ -623,7 +1136,7 @@
             // 1) Intentar leer de Firebase con timeout
             if (FIREBASE_AVAILABLE && checkIsOnline()) {
                 try {
-                    const snap = await withTimeout(db.ref('viajes_index').once('value'));
+                    const snap = await withTimeout(db.ref(`${getUserRoot()}/viajes_index`).once('value'));
                     if (snap.exists()) {
                         snap.forEach(c => { viajes.push({ ...c.val(), id: c.key }); });
                         viajes.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -661,9 +1174,11 @@
                 const sel = viajes.find(v => v.id === currentViajeId);
                 if (sel) setCache(CACHE.lastViaje, sel);
                 actualizarBadgeEstado(viajes);
+                updateNavigationLinks();
             } else {
                 selector.innerHTML = '<option value="">(No hay viajes)</option>';
                 currentViajeId = null;
+                updateNavigationLinks();
                 document.getElementById('lista-entradas').innerHTML =
                     '<p class="text-amber-600 py-4">⚠️ No hay viajes disponibles. Conectate una vez para descargar los datos, o creá un viaje nuevo con el botón ➕ NUEVO VIAJE.</p>';
             }
@@ -715,10 +1230,10 @@
             // Online
             if (FIREBASE_AVAILABLE && navigator.onLine) {
                 try {
-                    const snap = await withTimeout(db.ref('viajes_index/' + currentViajeId).once('value'));
+                    const snap = await withTimeout(db.ref(`${getUserRoot()}/viajes_index/` + currentViajeId).once('value'));
                     const activoServer = snap.exists() ? snap.val().activo : activo;
                     if (!activoServer) {
-                        const todos = await withTimeout(db.ref('viajes_index').once('value'));
+                        const todos = await withTimeout(db.ref(`${getUserRoot()}/viajes_index`).once('value'));
                         todos.forEach(c => { if (c.val().activo) SyncManager.save('viajes_index/' + c.key, 'update', { activo: false }, true); });
                     }
                     await SyncManager.save('viajes_index/' + currentViajeId, 'update', { activo: !activoServer }, true);
@@ -744,7 +1259,7 @@
             // Online
             if (FIREBASE_AVAILABLE && navigator.onLine) {
                 try {
-                    const snap = await withTimeout(db.ref('viajes_index').once('value'));
+                    const snap = await withTimeout(db.ref(`${getUserRoot()}/viajes_index`).once('value'));
                     if (snap.exists()) {
                         snap.forEach(c => { if (c.val().activo) SyncManager.save('viajes_index/' + c.key, 'update', { activo: false }, true); });
                     }
@@ -754,6 +1269,7 @@
                         currentViajeId = id;
                         setCache(CACHE.lastViajeId, id);
                         setCache(CACHE.lastViaje, { id, titulo, activo: true });
+                        updateNavigationLinks();
                         toast('Viaje creado');
                         await initAdminGlobal();
                         return;
@@ -794,17 +1310,139 @@
             if (id === 'tab-finanzas') initFinanzas();
         }
 
-        let uploadWidget;
+        /* ---- Subida a Cloudinary con compresión previa en el navegador ----
+           La imagen se reescala (lado largo <= FOTO_MAX_DIM) y se re-encodea a JPEG
+           antes de subirla. Así el almacenamiento que ocupa cada foto baja de varios
+           MB a ~200-400 KB y el plan gratuito de Cloudinary rinde muchísimo más. */
+        const FOTO_MAX_DIM = 1920;        // lado largo máximo tras comprimir
+        const FOTO_JPEG_QUALITY = 0.82;   // calidad JPEG
+
+        let subiendoFotos = false;
+
+        // Inserta parámetros de transformación en una URL de Cloudinary (si lo es).
+        function cldUrl(url, params) {
+            if (!url || typeof url !== 'string') return url;
+            const seg = '/image/upload/';
+            const idx = url.indexOf(seg);
+            if (idx === -1) return url;
+            return url.slice(0, idx + seg.length) + params + '/' + url.slice(idx + seg.length);
+        }
+
         function initCloudinaryWidget() {
-            if (typeof cloudinary === 'undefined') { setTimeout(initCloudinaryWidget, 500); return; }
-            uploadWidget = cloudinary.createUploadWidget({ cloudName: CLOUDINARY_CLOUD_NAME, uploadPreset: CLOUDINARY_UPLOAD_PRESET, multiple: true }, (err, res) => {
-                if (!err && res && res.event === 'success') {
-                    fotosUrls.push({ url: res.info.secure_url, descripcion: '' });
-                    renderFotosPreview();
+            const btn = document.getElementById('btn-upload');
+            const input = document.getElementById('foto-file-input');
+            if (!btn || !input) return;
+            btn.addEventListener('click', ev => {
+                ev.preventDefault();
+                if (subiendoFotos) { toast('Subiendo fotos, esperá…'); return; }
+                input.value = '';
+                input.click();
+            });
+            input.addEventListener('change', () => {
+                if (input.files && input.files.length) {
+                    procesarFotosSeleccionadas(Array.from(input.files));
                 }
             });
         }
-        document.getElementById('btn-upload').addEventListener('click', () => uploadWidget ? uploadWidget.open() : toast('Cargando...'));
+
+        function leerComoDataURL(file) {
+            return new Promise((resolve, reject) => {
+                const fr = new FileReader();
+                fr.onload = () => resolve(fr.result);
+                fr.onerror = () => reject(fr.error || new Error('No se pudo leer la imagen'));
+                fr.readAsDataURL(file);
+            });
+        }
+
+        function cargarImagen(src) {
+            return new Promise(resolve => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = () => resolve(null);
+                img.src = src;
+            });
+        }
+
+        function canvasToBlob(canvas, type, quality) {
+            return new Promise(resolve => canvas.toBlob(resolve, type, quality));
+        }
+
+        async function comprimirImagen(file) {
+            // Devuelve un Blob JPEG comprimido o el archivo original si no se pudo
+            // procesar (ej. HEIC) o si ya es un JPEG que no amerita re-encode.
+            if (!file || !/^image\//.test(file.type)) return file;
+            try {
+                const img = await cargarImagen(await leerComoDataURL(file));
+                if (!img || !img.naturalWidth) return file;
+                const scale = Math.min(1, FOTO_MAX_DIM / Math.max(img.naturalWidth, img.naturalHeight));
+                const w = Math.max(1, Math.round(img.naturalWidth * scale));
+                const h = Math.max(1, Math.round(img.naturalHeight * scale));
+                if (w === img.naturalWidth && h === img.naturalHeight && file.type === 'image/jpeg') {
+                    return file; // ya es JPEG y no hay que reescalar: evitar doble compresión
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = w; canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#fff'; // fondo blanco para PNG con transparencia
+                ctx.fillRect(0, 0, w, h);
+                ctx.drawImage(img, 0, 0, w, h);
+                const blob = await canvasToBlob(canvas, 'image/jpeg', FOTO_JPEG_QUALITY);
+                if (!blob || blob.size >= file.size) return file;
+                return new File([blob], (file.name || 'foto').replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' });
+            } catch (e) {
+                console.warn('No se pudo comprimir', file && file.name, e);
+                return file;
+            }
+        }
+
+        function subirACloudinary(blob) {
+            return new Promise((resolve, reject) => {
+                const fd = new FormData();
+                fd.append('file', blob);
+                fd.append('cloud_name', CLOUDINARY_CLOUD_NAME);
+                fd.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', 'https://api.cloudinary.com/v1_1/' + CLOUDINARY_CLOUD_NAME + '/image/upload');
+                xhr.onload = () => {
+                    let res = null;
+                    try { res = JSON.parse(xhr.responseText); } catch (e) {}
+                    if (xhr.status >= 200 && xhr.status < 300 && res && res.secure_url) resolve(res);
+                    else reject(new Error((res && res.error && res.error.message) || 'Error al subir a Cloudinary (código ' + xhr.status + ')'));
+                };
+                xhr.onerror = () => reject(new Error('Error de red al subir a Cloudinary'));
+                xhr.send(fd);
+            });
+        }
+
+        async function procesarFotosSeleccionadas(files) {
+            if (subiendoFotos) return;
+            subiendoFotos = true;
+            const btn = document.getElementById('btn-upload');
+            const statusEl = document.getElementById('upload-status');
+            if (btn) { btn.disabled = true; btn.classList.add('opacity-60', 'cursor-wait'); }
+            if (statusEl) statusEl.classList.remove('hidden');
+
+            let ok = 0, errores = 0;
+            for (let i = 0; i < files.length; i++) {
+                if (statusEl) statusEl.textContent = '⏳ Subiendo foto ' + (i + 1) + ' de ' + files.length + '…';
+                try {
+                    const archivo = await comprimirImagen(files[i]);
+                    const res = await subirACloudinary(archivo);
+                    fotosUrls.push({ url: res.secure_url, descripcion: '' });
+                    ok++;
+                } catch (e) {
+                    console.error('Fallo al subir', files[i] && files[i].name, e);
+                    errores++;
+                }
+            }
+
+            renderFotosPreview();
+            if (statusEl) { statusEl.textContent = ''; statusEl.classList.add('hidden'); }
+            if (btn) { btn.disabled = false; btn.classList.remove('opacity-60', 'cursor-wait'); }
+            subiendoFotos = false;
+            if (errores === 0) toast('¡' + ok + ' foto' + (ok === 1 ? '' : 's') + ' subida' + (ok === 1 ? '' : 's') + '!');
+            else toast('Subidas: ' + ok + '. Fallaron: ' + errores + '.');
+        }
 
         function renderFotosPreview() {
             const container = document.getElementById('fotos-preview');
@@ -813,7 +1451,7 @@
                 const desc = typeof f === 'string' ? '' : (f.descripcion || '');
                 return `
                 <div class="foto-preview relative border rounded p-1 bg-gray-50 flex flex-col gap-1 w-32">
-                    <img src="${url}" class="w-full h-20 object-cover rounded">
+                    <img src="${cldUrl(url, 'w_320,f_auto,q_auto')}" class="w-full h-20 object-cover rounded">
                     <input type="text" placeholder="Descripción..." value="${desc}" onchange="updateFotoDesc(${i}, this.value)" class="text-xs w-full p-1 border rounded">
                     <button onclick="fotosUrls.splice(${i},1);renderFotosPreview()" class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow hover:bg-red-600">&times;</button>
                 </div>`;
@@ -993,26 +1631,80 @@
         let cotizacionesTarjetaMemoria = {};
         let esMontoUSManual = false;
 
+        function abrirModalConfigViaje() {
+            if (!currentViajeId) {
+                toast('Error: Seleccioná o creá un viaje primero');
+                return;
+            }
+            const modal = document.getElementById('modal-config-viaje');
+            if (!modal) return;
+
+            const cache = getViajeCache(currentViajeId);
+            const cfg = cache.configuracion || {};
+
+            // Actualizar estado del viaje
+            const viajes = getCache(CACHE.viajes) || [];
+            actualizarBadgeEstado(viajes);
+
+            // Viajeros
+            let v = (viajerosList && viajerosList.length > 0) ? viajerosList : cfg.viajeros;
+            if (v && typeof v === 'object' && !Array.isArray(v)) v = Object.values(v);
+            if (Array.isArray(v) && v.length > 0) {
+                viajerosList = v;
+                document.getElementById('c-viajeros').value = v.join(', ');
+            } else {
+                document.getElementById('c-viajeros').value = '';
+            }
+
+            // Monedas
+            const orig = monedaOrigen || cfg.moneda_origen || 'UY$';
+            let mList = (monedasGastoList && monedasGastoList.length > 0) ? monedasGastoList : (cfg.monedas_gasto || ['AR$', 'US$', 'UY$']);
+            if (mList && typeof mList === 'object' && !Array.isArray(mList)) mList = Object.values(mList);
+            monedaOrigen = orig;
+            monedasGastoList = Array.isArray(mList) ? mList : String(mList).split(',').map(s => s.trim()).filter(Boolean);
+            document.getElementById('c-moneda-origen').value = monedaOrigen;
+            document.getElementById('c-monedas-gasto').value = monedasGastoList.join(', ');
+
+            // Presupuesto estimado
+            const pres = cfg.presupuesto_estimado || {};
+            document.getElementById('p-combustible').value = pres.Combustible != null ? pres.Combustible : '';
+            document.getElementById('p-hoteleria').value = pres.Hoteleria != null ? pres.Hoteleria : '';
+            document.getElementById('p-excursiones').value = pres.Excursiones != null ? pres.Excursiones : '';
+            document.getElementById('p-alimentacion').value = pres.Alimentacion != null ? pres.Alimentacion : '';
+            document.getElementById('p-otros').value = pres.Otros != null ? pres.Otros : '';
+
+            modal.classList.remove('hidden');
+        }
+
         async function initFinanzas() {
+            if (!currentViajeId) return;
             const hoy = new Date().toISOString().split('T')[0];
             if (!document.getElementById('c-tarjeta-fecha').value) document.getElementById('c-tarjeta-fecha').value = hoy;
             if (!document.getElementById('g-fecha').value) document.getElementById('g-fecha').value = hoy;
 
             const cache = getViajeCache(currentViajeId);
-            const cfg = cache.configuracion || {};
+            let cfg = cache.configuracion || {};
+
+            // Cargar toda la configuración en una sola llamada si estamos online
+            if (FIREBASE_AVAILABLE && checkIsOnline()) {
+                try {
+                    const snap = await withTimeout(getRef('configuracion').once('value'), 6000);
+                    if (snap.exists()) {
+                        const val = snap.val() || {};
+                        cfg = { ...cfg, ...val };
+                        cache.configuracion = cfg;
+                        setViajeCache(currentViajeId, cache);
+                    }
+                } catch (e) {
+                    console.warn('No se pudo descargar configuración de Firebase:', e);
+                }
+            }
 
             // 1. Monedas
             let orig = cfg.moneda_origen || 'UY$';
             let mList = cfg.monedas_gasto || ['AR$', 'US$', 'UY$'];
-            if (FIREBASE_AVAILABLE && navigator.onLine) {
-                try {
-                    const mSnap = await withTimeout(getRef('configuracion').once('value'));
-                    if (mSnap.exists()) {
-                        const val = mSnap.val();
-                        if (val.moneda_origen) orig = val.moneda_origen;
-                        if (val.monedas_gasto) mList = val.monedas_gasto;
-                    }
-                } catch (e) {}
+            if (mList && typeof mList === 'object' && !Array.isArray(mList)) {
+                mList = Object.values(mList);
             }
             monedaOrigen = orig;
             monedasGastoList = Array.isArray(mList) ? mList : String(mList).split(',').map(s => s.trim()).filter(Boolean);
@@ -1022,18 +1714,10 @@
 
             // 2. Viajeros
             let viajeros = cfg.viajeros || null;
-            if (FIREBASE_AVAILABLE && navigator.onLine) {
-                try {
-                    const vSnap = await withTimeout(getRef('configuracion/viajeros').once('value'));
-                    if (vSnap.exists()) {
-                        viajeros = vSnap.val();
-                        cache.configuracion = cache.configuracion || {};
-                        cache.configuracion.viajeros = viajeros;
-                        setViajeCache(currentViajeId, cache);
-                    }
-                } catch (e) {}
+            if (viajeros && typeof viajeros === 'object' && !Array.isArray(viajeros)) {
+                viajeros = Object.values(viajeros);
             }
-            if (viajeros) {
+            if (viajeros && Array.isArray(viajeros) && viajeros.length > 0) {
                 viajerosList = viajeros;
                 document.getElementById('c-viajeros').value = viajerosList.join(', ');
                 actualizarUiViajeros();
@@ -1041,38 +1725,16 @@
 
             // 3. Presupuesto estimado
             let presupuesto = cfg.presupuesto_estimado || null;
-            if (FIREBASE_AVAILABLE && navigator.onLine) {
-                try {
-                    const pSnap = await withTimeout(getRef('configuracion/presupuesto_estimado').once('value'));
-                    if (pSnap.exists()) {
-                        presupuesto = pSnap.val();
-                        cache.configuracion = cache.configuracion || {};
-                        cache.configuracion.presupuesto_estimado = presupuesto;
-                        setViajeCache(currentViajeId, cache);
-                    }
-                } catch (e) {}
-            }
             if (presupuesto) {
-                document.getElementById('p-combustible').value = presupuesto.Combustible || '';
-                document.getElementById('p-hoteleria').value = presupuesto.Hoteleria || '';
-                document.getElementById('p-excursiones').value = presupuesto.Excursiones || '';
-                document.getElementById('p-alimentacion').value = presupuesto.Alimentacion || '';
-                document.getElementById('p-otros').value = presupuesto.Otros || '';
+                document.getElementById('p-combustible').value = presupuesto.Combustible != null ? presupuesto.Combustible : '';
+                document.getElementById('p-hoteleria').value = presupuesto.Hoteleria != null ? presupuesto.Hoteleria : '';
+                document.getElementById('p-excursiones').value = presupuesto.Excursiones != null ? presupuesto.Excursiones : '';
+                document.getElementById('p-alimentacion').value = presupuesto.Alimentacion != null ? presupuesto.Alimentacion : '';
+                document.getElementById('p-otros').value = presupuesto.Otros != null ? presupuesto.Otros : '';
             }
 
             // 4. Tasas efectivo
             let efectivo = cfg.efectivo || null;
-            if (FIREBASE_AVAILABLE && navigator.onLine) {
-                try {
-                    const cSnap = await withTimeout(getRef('configuracion/efectivo').once('value'));
-                    if (cSnap.exists()) {
-                        efectivo = cSnap.val();
-                        cache.configuracion = cache.configuracion || {};
-                        cache.configuracion.efectivo = efectivo;
-                        setViajeCache(currentViajeId, cache);
-                    }
-                } catch (e) {}
-            }
             if (efectivo) cotizacionesEfectivoMemoria = efectivo;
             cargarCotizacionEfectivoActual();
 
@@ -1462,12 +2124,19 @@
             const countEl = document.getElementById('gastos-count');
             if (countEl) countEl.textContent = arr.length ? `(${arr.length})` : '';
 
+            const fmtNum = (v) => {
+                const n = parseFloat(v);
+                if (isNaN(n)) return '—';
+                // Quita ceros innecesarios: 1200.50 → "1200.5", 1200.00 → "1200"
+                return n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2, useGrouping: false });
+            };
             document.getElementById('lista-gastos-admin').innerHTML = arr.length ? arr.map(d => {
                 const invol = Array.isArray(d.involucrados) ? d.involucrados.join(', ') : '';
                 const editing = currentGastoEditId === d.id;
                 const origVal = d.monedaOrigen || monedaOrigen;
-                const valUS = d.montoUS != null ? d.montoUS : '—';
-                const valOrig = d.montoOrigen != null ? d.montoOrigen : '—';
+                const valUS = d.montoUS != null ? fmtNum(d.montoUS) : '—';
+                const valOrig = d.montoOrigen != null ? fmtNum(d.montoOrigen) : '—';
+                const valMonto = d.monto != null ? fmtNum(d.monto) : '—';
 
                 return `
                 <tr class="border-b ${editing ? 'bg-amber-50' : ''}">
@@ -1476,7 +2145,7 @@
                     <td class="pr-2 max-w-[10rem] truncate" title="${escapeHtml(d.detalle || '')}">${escapeHtml(d.detalle || '—')}</td>
                     <td class="pr-2"><span class="bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded font-bold">${escapeHtml(d.pagador || 'N/A')}</span></td>
                     <td class="pr-2 text-xs text-gray-600">${escapeHtml(invol || '—')}</td>
-                    <td class="pr-2 whitespace-nowrap font-medium">${escapeHtml(d.moneda)} ${escapeHtml(d.monto)} <span class="text-gray-400 text-xs">(${escapeHtml(d.metodo)})</span></td>
+                    <td class="pr-2 whitespace-nowrap font-medium">${escapeHtml(d.moneda)} ${valMonto} <span class="text-gray-400 text-xs">(${escapeHtml(d.metodo)})</span></td>
                     <td class="pr-2 whitespace-nowrap font-bold text-amber-700">US$ ${escapeHtml(valUS)}</td>
                     <td class="pr-2 whitespace-nowrap text-emerald-700 font-medium">${escapeHtml(origVal)} ${escapeHtml(valOrig)}</td>
                     <td class="whitespace-nowrap text-right">
@@ -1499,8 +2168,75 @@
 
         initCloudinaryWidget();
 
-        // Inicializar app
-        initAdminGlobal().then(() => actualizarBadgeComentarios());
+        // Control de sesión y autenticación al inicio.
+        // Estrategia "resolver antes de mostrar": la pantalla de carga (boot-screen)
+        // cubre toda la página mientras Firebase decide si hay sesión o no. Solo cuando
+        // la decisión está tomada se oculta la carga y se revela el panel
+        // (onUserAuthenticated) o el modal de login (confirmarSinSesion), ambos en un
+        // único instante. Así no parpadean ni la página ni el modal.
+        if (FIREBASE_AVAILABLE && auth) {
+            let authDecideTimer = null;
+
+            function confirmarSinSesion() {
+                clearTimeout(authDecideTimer);
+                authUser = null;
+                currentUsername = null;
+                localStorage.removeItem('travelapp_active_user');
+                const infoBar = document.getElementById('user-info-bar');
+                if (infoBar) {
+                    infoBar.classList.add('hidden');
+                    infoBar.classList.remove('flex');
+                }
+                // Oculta la pantalla de carga y muestra el login en el mismo instante.
+                showAuthModal('credentials');
+            }
+
+            function decidirSinSesion() {
+                if (!auth.currentUser && !authUser) confirmarSinSesion();
+            }
+
+            auth.onAuthStateChanged(async user => {
+                clearTimeout(authDecideTimer);
+
+                if (user) {
+                    authUser = user;
+                    // Consultar si ya tiene un username asignado en /users/{uid}
+                    try {
+                        const snap = await db.ref(`users/${user.uid}`).once('value');
+                        if (snap.exists() && snap.val().username) {
+                            currentUsername = snap.val().username;
+                            localStorage.setItem('travelapp_active_user', currentUsername);
+                            onUserAuthenticated(); // revela el panel (oculta la carga)
+                        } else {
+                            // Usuario sin username: solicitar que elija uno
+                            showAuthModal('username');
+                        }
+                    } catch (e) {
+                        console.error('Error al verificar perfil de usuario en Firebase:', e);
+                        // Fallback para modo offline si el usuario ya tenía sesión guardada
+                        const cachedUser = localStorage.getItem('travelapp_active_user');
+                        if (cachedUser) {
+                            currentUsername = cachedUser;
+                            onUserAuthenticated();
+                        } else {
+                            showAuthModal('username');
+                        }
+                    }
+                    return;
+                }
+
+                // Sin sesión por ahora: puede ser un estado transitorio mientras Firebase
+                // restaura una sesión guardada en la pestaña. Mientras tanto la pantalla
+                // de carga sigue cubriendo la página; solo pedimos login cuando es seguro
+                // que no hay sesión que restaurar.
+                const haySesionPendiente = tieneSesionGuardada();
+                authDecideTimer = setTimeout(decidirSinSesion, haySesionPendiente ? 5000 : 700);
+            });
+        } else {
+            // Si Firebase no está disponible, iniciar con usuario local
+            onUserAuthenticated();
+        }
     </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a34e72f27c4c11e8',t:'MTc4ODM3MjM5MA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a34e72f27c4c11e8',t:'MTc4ODM3MjM5MA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a388053cbc5b1eba',t:'MTc4ODk3NjA3MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
+</body>
 </html>
