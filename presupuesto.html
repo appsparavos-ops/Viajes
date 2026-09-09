@@ -109,6 +109,7 @@
         const CACHE = {
             viajes: 'travelapp_viajes_cache',
             lastViajeId: 'travelapp_last_viaje_id',
+            lastViaje: 'travelapp_last_viaje',
             viajeData: id => 'travelapp_viajedata_' + id
         };
 
@@ -166,29 +167,71 @@
         function setViajeCache(id, cache) { setCache(CACHE.viajeData(id), cache); }
 
         function withTimeout(promise, ms = TIMEOUT_MS) {
+            let timer;
             return Promise.race([
                 promise,
-                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))
-            ]);
+                new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('timeout')), ms); })
+            ]).finally(() => clearTimeout(timer));
         }
 
-        let isFirebaseConnected = false;
+        let isFirebaseConnected = null;
+        let usandoCache = false;
+        let actualizacionEnCurso = null;
+        let actualizarPendiente = false;
+
         function checkIsOnline() {
-            return navigator.onLine && (typeof isFirebaseConnected === 'undefined' || isFirebaseConnected);
+            // .info/connected=false también ocurre durante el arranque del SDK.
+            // No impedir las lecturas: su timeout decide si hay que usar la caché.
+            return navigator.onLine !== false;
         }
 
         function actualizarBannerOffline() {
             const banner = document.getElementById('banner-offline');
-            if (banner) banner.classList.toggle('hidden', checkIsOnline());
+            if (!banner) return;
+            const sinRed = !checkIsOnline();
+            const sinSDK = !FIREBASE_AVAILABLE || !db;
+            banner.classList.toggle('hidden', !sinRed && !sinSDK && !usandoCache);
+            banner.textContent = sinRed
+                ? '📵 Sin conexión — Modo offline. Estás viendo la última copia guardada en el dispositivo.'
+                : sinSDK
+                    ? '⚠️ Firebase no está disponible. Se usa la copia local si existe. Revisá los scripts y firebase-config.js.'
+                    : '⚠️ No se pudieron actualizar todos los datos desde Firebase. Se usa la copia local donde está disponible.';
+        }
+
+        function marcarUsoCache() {
+            usandoCache = true;
+            actualizarBannerOffline();
+        }
+
+        // Serializar refrescos de red para no superponer inicializaciones.
+        function solicitarActualizacion() {
+            if (actualizacionEnCurso) {
+                actualizarPendiente = true;
+                return actualizacionEnCurso;
+            }
+            actualizacionEnCurso = (async () => {
+                do {
+                    actualizarPendiente = false;
+                    await initPresupuestoGlobal();
+                } while (actualizarPendiente);
+            })().catch(error => {
+                console.error('Error actualizando presupuesto:', error);
+                marcarUsoCache();
+            }).finally(() => { actualizacionEnCurso = null; });
+            return actualizacionEnCurso;
         }
 
         if (FIREBASE_AVAILABLE && db) {
             try {
                 db.ref('.info/connected').on('value', snap => {
-                    isFirebaseConnected = !!snap.val();
-                    actualizarBannerOffline();
+                    const anterior = isFirebaseConnected;
+                    isFirebaseConnected = snap.val() === true;
+                    if (isFirebaseConnected && anterior !== true) {
+                        // También reconstruir el selector para quitar la etiqueta de caché.
+                        solicitarActualizacion();
+                    }
                 });
-            } catch (e) {}
+            } catch (e) { console.warn('No se pudo observar la conexión Firebase:', e); }
         }
 
         function getRef(path) {
@@ -201,13 +244,13 @@
             if (FIREBASE_AVAILABLE && checkIsOnline() && currentViajeId) {
                 try {
                     const snap = await withTimeout(getRef(path).once('value'));
-                    if (snap.exists()) {
-                        return { data: decodeObjectKeys(snap.val()), fromServer: true };
-                    }
+                    return { data: snap.exists() ? decodeObjectKeys(snap.val()) : null, fromServer: true };
                 } catch (e) {
                     console.warn(`Error al leer ${path}:`, e);
+                    if (e && e.message === 'timeout') isFirebaseConnected = false;
                 }
             }
+            marcarUsoCache();
             return { data: fallbackValue, fromServer: false };
         }
 
@@ -226,6 +269,7 @@
         }
 
         async function initPresupuestoGlobal() {
+            usandoCache = false;
             actualizarBannerOffline();
             const selector = document.getElementById('select-viaje-presupuesto');
             let viajes = [];
@@ -240,6 +284,7 @@
                         setCache(CACHE.viajes, viajes);
                     }
                 } catch (e) {
+                    if (e && e.message === 'timeout') isFirebaseConnected = false;
                     viaSource = 'cache';
                     viajes = getCache(CACHE.viajes) || [];
                 }
@@ -248,6 +293,8 @@
                 viajes = getCache(CACHE.viajes) || [];
             }
 
+            if (viaSource === 'cache') marcarUsoCache();
+
             if (viajes.length === 0) {
                 const last = getCache(CACHE.lastViaje);
                 if (last) viajes = [last];
@@ -255,7 +302,7 @@
 
             if (viajes.length > 0) {
                 selector.innerHTML = viajes.map(v =>
-                    `<option value="${v.id}">${v.titulo} ${v.activo ? '✅' : '⛔'}${viaSource === 'cache' ? ' (offline)' : ''}</option>`
+                    `<option value="${v.id}">${v.titulo} ${v.activo ? '✅' : '⛔'}</option>`
                 ).join('');
 
                 const savedId = getCache(CACHE.lastViajeId);
@@ -319,7 +366,10 @@
                             cache.cotizaciones = cotizacionesDias;
                             setViajeCache(currentViajeId, cache);
                         }
-                    } catch (e) { /* usa la caché */ }
+                    } catch (e) {
+                        console.warn('No se pudieron actualizar los datos:', e);
+                        marcarUsoCache();
+                    }
                 }
                 const arrayFechas = Object.keys(cotizacionesDias).sort();
 
@@ -350,7 +400,10 @@
                             cache.gastos = gastosBrutos;
                             setViajeCache(currentViajeId, cache);
                         }
-                    } catch (e) { /* usa la caché */ }
+                    } catch (e) {
+                        console.warn('No se pudieron actualizar los datos:', e);
+                        marcarUsoCache();
+                    }
                 }
                 gastosBrutos = (gastosBrutos || []).slice().reverse();
 
@@ -557,11 +610,11 @@
         // Al recuperar la conexión, refrescar los datos automáticamente
         window.addEventListener('online', () => {
             actualizarBannerOffline();
-            if (currentViajeId) cargarDatos();
+            solicitarActualizacion();
         });
         window.addEventListener('offline', () => actualizarBannerOffline());
 
-        initPresupuestoGlobal();
+        solicitarActualizacion();
     </script>
 </body>
 </html>
