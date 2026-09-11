@@ -66,7 +66,7 @@
                 <span>🔄 Sincronizar</span>
             </button>
             <a id="btn-presupuesto-link" href="presupuesto.html" class="text-sm bg-green-600 hover:bg-green-500 px-4 py-2 rounded-lg">💰 Presupuesto</a>
-            <a id="btn-ver-bitacora" href="viaje.html" target="_blank" class="text-sm bg-amber-600 hover:bg-amber-500 px-4 py-2 rounded-lg">Ver bitácora →</a>
+            <a id="btn-ver-bitacora" href="viaje.html" onclick="abrirVistaBitacora(this.href); return false;" class="text-sm bg-amber-600 hover:bg-amber-500 px-4 py-2 rounded-lg cursor-pointer">Ver bitácora →</a>
         </div>
     </header>
 
@@ -273,9 +273,9 @@
                             <h3 class="text-sm font-bold text-amber-900">📥 Importar ruta de Google Maps</h3>
                             <p class="text-xs text-amber-800 mt-1">Desde Google Maps exportá Timeline.json o location-history.json y seleccioná el archivo aquí.</p>
                             <p class="text-xs text-amber-800 mt-1.5">
-                                ¿Tu Timeline.json pesa varios MB o la ruta va a ser del año pasado o anterior?
-                                <a href="recortar-timeline.html" target="_blank" rel="noopener" class="font-bold underline decoration-amber-500 underline-offset-2 hover:text-amber-950">🧹 Abrí el Limpiador de Timeline</a>:
-                                lo procesa en tu navegador y genera un archivo chico y depurado, ideal para importar acá.
+                                ¿Tu Timeline.json pesa varios MB? Procesalo sin salir de esta pantalla:
+                                <button type="button" onclick="abrirLimpiadorTimeline()" class="ml-1 inline-flex items-center gap-1 font-bold bg-amber-700 hover:bg-amber-800 text-white px-2.5 py-1 rounded-lg shadow-sm transition text-[11px]">🧹 Abrir el Limpiador de Timeline</button>
+                                — genera un archivo chico y depurado, listo para importar con el botón de arriba.
                             </p>
                         </div>
                         <input type="file" id="timeline-file-input" accept=".json,application/json,text/json" class="hidden">
@@ -496,6 +496,75 @@
     </div>
 
     <div id="toast" class="fixed bottom-6 right-6 bg-gray-800 text-white px-5 py-3 rounded-xl hidden z-50 shadow-xl"></div>
+
+    <!-- Modal Limpiador de Timeline: se abre DENTRO del panel (iframe) para no perder
+         el estado del admin. target=_blank / window.open son bloqueados por algunos
+         empaquetadores (MSI/WebView2/Electron); el iframe funciona en todos. -->
+    <div id="modal-limpiador" class="hidden fixed inset-0 z-[200] bg-gray-900/60 backdrop-blur-sm flex flex-col p-2 sm:p-6">
+        <div class="bg-white rounded-2xl shadow-2xl flex flex-col flex-1 overflow-hidden max-w-5xl w-full mx-auto">
+            <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-200 bg-amber-50">
+                <h3 class="text-sm font-bold text-amber-900">🧹 Limpiador de Timeline <span class="font-normal text-amber-700 hidden sm:inline">— recortá el JSON y después importalo acá mismo, sin cambiar de ventana</span></h3>
+                <div class="flex items-center gap-3 shrink-0">
+                    <a href="recortar-timeline.html" target="_blank" rel="noopener" class="text-xs font-bold text-gray-500 hover:text-amber-700 underline">abrir en pestaña ↗</a>
+                    <button type="button" onclick="cerrarLimpiadorTimeline()" class="text-2xl text-gray-400 hover:text-gray-800 leading-none">&times;</button>
+                </div>
+            </div>
+            <iframe id="iframe-limpiador" src="" class="flex-1 w-full border-0" title="Limpiador de Timeline"></iframe>
+        </div>
+    </div>
+    <script>
+        function abrirLimpiadorTimeline() {
+            const m = document.getElementById('modal-limpiador');
+            const f = document.getElementById('iframe-limpiador');
+            // Se carga la primera vez; NO se recarga al reabrir para no perder lo procesado.
+            if (f && !f.dataset.cargado) { f.src = 'recortar-timeline.html'; f.dataset.cargado = '1'; }
+            m.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+        function cerrarLimpiadorTimeline() {
+            document.getElementById('modal-limpiador').classList.add('hidden');
+            document.body.style.overflow = '';
+        }
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && !document.getElementById('modal-limpiador').classList.contains('hidden')) cerrarLimpiadorTimeline();
+        });
+    </script>
+
+    <!-- Modal Vista de la bitácora: mismo patrón que el Limpiador — abre viaje.html
+         DENTRO del panel (iframe) porque target=_blank/window.open son bloqueados
+         por algunos empaquetadores (MSI/WebView2/Electron). -->
+    <div id="modal-bitacora" class="hidden fixed inset-0 z-[200] bg-gray-900/60 backdrop-blur-sm flex flex-col p-2 sm:p-6">
+        <div class="bg-white rounded-2xl shadow-2xl flex flex-col flex-1 overflow-hidden max-w-6xl w-full mx-auto">
+            <div class="flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-200 bg-amber-50">
+                <h3 class="text-sm font-bold text-amber-900">📖 Vista de la bitácora <span class="font-normal text-amber-700 hidden sm:inline">— como la ven los visitantes</span></h3>
+                <div class="flex items-center gap-3 shrink-0">
+                    <a id="bitacora-abrir-externo" href="viaje.html" target="_blank" rel="noopener" class="text-xs font-bold text-gray-500 hover:text-amber-700 underline">abrir en pestaña ↗</a>
+                    <button type="button" onclick="cerrarVistaBitacora()" class="text-2xl text-gray-400 hover:text-gray-800 leading-none">&times;</button>
+                </div>
+            </div>
+            <iframe id="iframe-bitacora" src="" class="flex-1 w-full border-0" title="Vista de la bitácora"></iframe>
+        </div>
+    </div>
+    <script>
+        function abrirVistaBitacora(url) {
+            const m = document.getElementById('modal-bitacora');
+            const f = document.getElementById('iframe-bitacora');
+            const ext = document.getElementById('bitacora-abrir-externo');
+            const destino = url || 'viaje.html';
+            // Siempre se recarga: refleja el usuario/viaje seleccionado en este momento.
+            if (f) f.src = destino;
+            if (ext) ext.href = destino;
+            m.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+        function cerrarVistaBitacora() {
+            document.getElementById('modal-bitacora').classList.add('hidden');
+            document.body.style.overflow = '';
+        }
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && !document.getElementById('modal-bitacora').classList.contains('hidden')) cerrarVistaBitacora();
+        });
+    </script>
 
     <script src="lib/firebase-app-compat.js"></script>
     <script src="lib/firebase-auth-compat.js"></script>
@@ -2941,10 +3010,44 @@
         }
 
         async function eliminarDia(id) {
-            if (confirm('¿Seguro que querés borrar este día entero?')) {
-                await SyncManager.save('dias/' + id, 'remove');
-                cargarEntradas();
+            if (!confirm('¿Seguro que querés borrar este día entero?\n\nTambién se eliminará su ruta GPS, si tiene una registrada.')) return;
+
+            // 1) Conocer la fecha del día: es la clave bajo la que se guarda su ruta.
+            let d = null;
+            const cache = getViajeCache(currentViajeId);
+            if (FIREBASE_AVAILABLE && navigator.onLine && !modoBorrador) {
+                try {
+                    const snap = await withTimeout(getRef('dias/' + id).once('value'));
+                    if (snap.exists()) d = snap.val();
+                } catch (e) { /* se usa la caché */ }
             }
+            if (!d) d = (cache.dias || []).find(x => x.id === id);
+            if (!d && typeof mergeQueued === 'function') d = mergeQueued([], 'dias').find(x => x.id === id);
+
+            // 2) Eliminar el día (caché + Firebase, o cola si está offline)
+            await SyncManager.save('dias/' + id, 'remove');
+
+            // 3) Eliminar también su ruta GPS: servidor/cola + caché local de rutas,
+            //    para que no reaparezca al sincronizar.
+            let rutaEliminada = false;
+            if (d && d.fecha) {
+                const fechaRuta = (typeof d.fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d.fecha))
+                    ? d.fecha
+                    : fechaRutaDeTimestamp(d.fecha);
+                if (fechaRuta) {
+                    try {
+                        await SyncManager.save('rutas/' + fechaRuta, 'remove');
+                        rutaEliminada = true;
+                    } catch (e) {
+                        console.warn('No se pudo eliminar la ruta del día:', e);
+                    }
+                    try { localStorage.removeItem(rutaLocalKey(getUserRoot(), currentViajeId, fechaRuta)); } catch (e) {}
+                }
+            }
+
+            cargarEntradas();
+            if (typeof cargarRutaDelDia === 'function') { try { cargarRutaDelDia(); } catch (e) {} }
+            toast(rutaEliminada ? '🗑️ Día y ruta GPS eliminados.' : '🗑️ Día eliminado.');
         }
 
         /* ---------------- COMENTARIOS ---------------- */
@@ -3646,6 +3749,6 @@
         }
     </script>
 <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a34e72f27c4c11e8',t:'MTc4ODM3MjM5MA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a38aa65e2e78dd2e',t:'MTc4OTAwMzY0Mg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a38fc1d1be6ac1a0',t:'MTc4OTA1NzE5NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a39977288d49d841',t:'MTc4OTE1ODk5NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a38aa65e2e78dd2e',t:'MTc4OTAwMzY0Mg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a38fc1d1be6ac1a0',t:'MTc4OTA1NzE5NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a39a0c245a3b1e7c',t:'MTc4OTE2NTA5Nw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>
