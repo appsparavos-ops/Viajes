@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Limpiador de Timeline de Google</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: #fafaf9; color: #1f2937; margin: 0; padding: 24px; }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; font-weight: 800; margin: 0 0 4px; }
+  .sub { color: #6b7280; font-size: .9rem; margin-bottom: 20px; }
+  .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,.04); margin-bottom: 16px; }
+  label { display: block; font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #b45309; margin-bottom: 8px; }
+  input[type=file] { width: 100%; padding: 12px; border: 2px dashed #d1d5db; border-radius: 10px; background: #f9fafb; cursor: pointer; }
+  button { background: #d97706; color: #fff; border: none; border-radius: 10px; padding: 10px 16px; font-weight: 700; font-size: .85rem; cursor: pointer; transition: background .15s; }
+  button:hover { background: #b45309; }
+  button.sec { background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; }
+  button.sec:hover { background: #e5e7eb; }
+  button:disabled { opacity: .45; cursor: default; }
+  #estado { font-size: .9rem; margin-top: 12px; color: #6b7280; white-space: pre-wrap; }
+  table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+  th { text-align: left; font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: #9ca3af; padding: 6px 8px; border-bottom: 2px solid #e5e7eb; }
+  td { padding: 7px 8px; border-bottom: 1px solid #f3f4f6; font-variant-numeric: tabular-nums; }
+  tr:hover td { background: #fffbeb; }
+  .pila { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  .nota { font-size: .8rem; color: #9ca3af; margin-top: 14px; line-height: 1.5; }
+  .chip { display: inline-block; background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; border-radius: 999px; font-size: .72rem; font-weight: 700; padding: 2px 9px; }
+  .oculto { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🧹 Limpiador de Timeline de Google</h1>
+  <p class="sub">Procesa el <code>Timeline.json</code> (incluso de decenas de MB) <strong>en tu navegador</strong>: nada se sube a internet. Genera un archivo chico y limpio para reimportar en la bitácora.</p>
+
+  <div class="card">
+    <label for="archivo">1 · Elegí el Timeline.json de Google</label>
+    <input type="file" id="archivo" accept=".json,application/json">
+    <div id="estado"></div>
+  </div>
+
+  <div class="card oculto" id="card-resumen">
+    <label>2 · Días detectados en el archivo</label>
+    <div style="overflow-x:auto; max-height:320px; overflow-y:auto;">
+      <table>
+        <thead><tr><th>Día</th><th style="text-align:right">Puntos</th><th style="text-align:right">Distancia</th><th></th></tr></thead>
+        <tbody id="tabla-dias"></tbody>
+      </table>
+    </div>
+    <div class="pila">
+      <button id="btn-todo" class="sec">⬇️ Descargar TODO limpio</button>
+      <span id="resumen-limpieza" class="chip" style="align-self:center"></span>
+    </div>
+    <p class="nota">El archivo descargado usa el formato clásico (<code>locations</code>) que el admin de la bitácora lee directo. Para reimportar un día: en el panel elegí el viaje y la fecha, subí este archivo chico y sincronizá — ya no hace falta cargar los 75 MB cada vez.</p>
+  </div>
+</div>
+
+<script>
+/* ===== Parser idéntico al de viaje-admin.html (extraído automáticamente) ===== */
+function parseTimestampRuta(value) {
+            if (value == null || value === '') return null;
+            if (typeof value === 'object') {
+                if (value.seconds != null) return Number(value.seconds) * 1000 + Math.round(Number(value.nanoseconds || 0) / 1000000);
+                return null;
+            }
+            if (typeof value === 'number' || /^\d+(\.\d+)?$/.test(String(value))) {
+                let n = Number(value);
+                if (n < 100000000000) n *= 1000; // segundos Unix
+                return Number.isFinite(n) ? n : null;
+            }
+            const n = Date.parse(String(value));
+            return Number.isFinite(n) ? n : null;
+        }
+
+        function coordsDesdeTimeline(value) {
+            if (value == null) return null;
+            if (typeof value === 'string') {
+                const s = value.trim().replace(/^geo:/i, '');
+                // Acepta el formato nuevo de exportación de Google con símbolo de
+                // grados: "-34.8804161°, -56.1862484°", además del clásico "lat, lng".
+                const m = s.match(/^(-?\d+(?:\.\d+)?)\s*°?\s*,\s*(-?\d+(?:\.\d+)?)\s*°?/);
+                if (m) return { lat: Number(m[1]), lng: Number(m[2]) };
+                return null;
+            }
+            if (typeof value !== 'object') return null;
+            if (value.latitudeE7 != null && value.longitudeE7 != null) return { lat: Number(value.latitudeE7) / 1e7, lng: Number(value.longitudeE7) / 1e7 };
+            if (value.latE7 != null && value.lngE7 != null) return { lat: Number(value.latE7) / 1e7, lng: Number(value.lngE7) / 1e7 };
+            if (value.latitude != null && value.longitude != null) return { lat: Number(value.latitude), lng: Number(value.longitude) };
+            if (value.lat != null && (value.lng != null || value.lon != null)) return { lat: Number(value.lat), lng: Number(value.lng != null ? value.lng : value.lon) };
+            const nestedKeys = ['point', 'latLng', 'geo', 'location', 'placeLocation', 'startLocation', 'endLocation'];
+            for (const key of nestedKeys) {
+                if (value[key] != null) {
+                    const c = coordsDesdeTimeline(value[key]);
+                    if (c) return c;
+                }
+            }
+            return null;
+        }
+
+        let ultimaLimpiezaTimeline = 0; // puntos descartados por redundancia en el último parse
+
+        function parseGoogleTimelineJson(data) {
+            const out = [];
+            const seen = new Set();
+            ultimaLimpiezaTimeline = 0;
+            const add = (coords, ts, accuracy, horaPropia) => {
+                if (!coords || !Number.isFinite(coords.lat) || !Number.isFinite(coords.lng) || Math.abs(coords.lat) > 90 || Math.abs(coords.lng) > 180) return;
+                const t = parseTimestampRuta(ts);
+                if (!t) return;
+                const p = { lat: coords.lat, lng: coords.lng, ts: t, accuracy: Number.isFinite(Number(accuracy)) ? Number(accuracy) : null, _h: horaPropia ? 1 : 0 };
+                const key = p.lat.toFixed(6) + '|' + p.lng.toFixed(6) + '|' + p.ts;
+                if (seen.has(key)) return;
+                seen.add(key);
+                out.push(p);
+            };
+
+            // Claves con la hora del PROPIO punto (no heredada del segmento que lo contiene)
+            const HORAS_PROPIAS = ['timestampMs', 'timestamp', 'time'];
+
+            const pointTimestamp = (obj, fallback) => {
+                if (!obj || typeof obj !== 'object') return fallback;
+                return obj.timestampMs || obj.timestamp || obj.time || obj.startTimestamp || obj.startTime || obj.startTimestampMs ||
+                    (obj.duration && (obj.duration.startTimestamp || obj.duration.startTime || obj.duration.startTimestampMs)) || fallback;
+            };
+
+            // Las claves que representan la LLEGADA de un segmento deben llevar la
+            // hora de FIN del tramo; si se sellan con la de inicio, al ordenar por
+            // hora el destino queda pegado al origen y el reproductor dibuja
+            // primero una línea recta origen→destino.
+            const endTimestamp = (obj, fallback) => {
+                if (!obj || typeof obj !== 'object') return fallback;
+                return obj.endTimestamp || obj.endTime || obj.endTimestampMs ||
+                    (obj.duration && (obj.duration.endTimestamp || obj.duration.endTime || obj.duration.endTimestampMs)) || fallback;
+            };
+            const esClaveLlegada = (key) => /^(end|endlocation|destination)$/i.test(key);
+
+            const parsePathArray = (arr, fallbackTs) => {
+                if (!Array.isArray(arr)) return;
+                arr.forEach(item => {
+                    if (typeof item === 'string') add(coordsDesdeTimeline(item), fallbackTs, null, false);
+                    else if (item && typeof item === 'object') {
+                        const propio = HORAS_PROPIAS.some(k => item[k] != null);
+                        add(coordsDesdeTimeline(item), pointTimestamp(item, fallbackTs), item.accuracy || (item.coords && item.coords.accuracy), propio);
+                    }
+                });
+            };
+
+            const CLAVES_PATH = ['timelinePath', 'waypointPath', 'path', 'points', 'locations', 'rawLocations', 'waypoints'];
+
+            const walk = (node, fallbackTs, fallbackEndTs, depth) => {
+                if (!node || depth > 12) return;
+                if (Array.isArray(node)) { node.forEach(x => walk(x, fallbackTs, fallbackEndTs, depth + 1)); return; }
+                if (typeof node !== 'object') return;
+                const ownTs = pointTimestamp(node, fallbackTs);
+                const ownEndTs = endTimestamp(node, fallbackEndTs);
+                const ownCoords = coordsDesdeTimeline(node);
+                if (ownCoords) add(ownCoords, ownTs, node.accuracy || (node.coords && node.coords.accuracy), HORAS_PROPIAS.some(k => node[k] != null));
+                CLAVES_PATH.forEach(key => {
+                    if (Array.isArray(node[key])) parsePathArray(node[key], ownTs);
+                    else if (node[key] && typeof node[key] === 'object') {
+                        // Formato clásico: waypointPath viene como { waypoints: [...] }
+                        walk(node[key], ownTs, ownEndTs, depth + 1);
+                    }
+                });
+                Object.keys(node).forEach(key => {
+                    if (['settings', 'userLocationProfile', 'placeVisit', 'visit', 'topCandidate'].includes(key)) {
+                        // Los lugares pueden aportar extremos, pero no deben llenar la ruta
+                        // con toda la metadata de Google.
+                        if (key === 'placeVisit' || key === 'visit') walk(node[key], ownTs, ownEndTs, depth + 1);
+                        return;
+                    }
+                    const v = node[key];
+                    if (v && typeof v === 'object' && !CLAVES_PATH.includes(key)) {
+                        walk(v, esClaveLlegada(key) ? ownEndTs : ownTs, ownEndTs, depth + 1);
+                    }
+                });
+            };
+
+            /* Si un segmento tiene al menos 3 puntos con hora PROPIA, su camino granular
+               ya cuenta el recorrido: los puntos sellados con horas heredadas del tramo
+               (extremos de activity, paths en texto plano) son una segunda copia que
+               dibuja la ruta dos veces y genera las rectas origen↔destino. Se descartan.
+               Si NO hay camino con horas (Takeout clásico, vuelos sin detalle), se
+               conserva todo: es la única geometría disponible. */
+            const limpiarSegmento = (desde, hasta) => {
+                const pts = out.slice(desde, hasta);
+                if (!pts.length) return;
+                const conHoraPropia = pts.filter(p => p._h).length;
+                if (conHoraPropia >= 3) {
+                    const limpios = pts.filter(p => p._h);
+                    ultimaLimpiezaTimeline += (pts.length - limpios.length);
+                    out.splice(desde, hasta - desde, ...limpios);
+                }
+            };
+            const incorporar = (x) => {
+                const antes = out.length;
+                walk(x, null, null, 0);
+                limpiarSegmento(antes, out.length);
+            };
+
+            const distM = (a, b) => {
+                const r = Math.PI / 180;
+                const h = Math.sin((b.lat - a.lat) * r / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin((b.lng - a.lng) * r / 2) ** 2;
+                return 6371000 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(Math.max(0, 1 - h)));
+            };
+
+            // Quita la "punta" de una recta de ida y vuelta: B queda a kilómetros de
+            // A y de C, pero A y C están juntos → la recta era un artefacto del sello
+            // de hora, no un desplazamiento real.
+            const quitarPuntasDeRecta = (pts) => {
+                if (!Array.isArray(pts) || pts.length < 4) return pts;
+                let arr = pts;
+                for (let pasada = 0; pasada < 2; pasada++) {
+                    const res = [arr[0]];
+                    for (let i = 1; i < arr.length - 1; i++) {
+                        const a = res[res.length - 1], b = arr[i], c = arr[i + 1];
+                        const dAB = distM(a, b), dBC = distM(b, c), dAC = distM(a, c);
+                        const umbralVecinos = Math.max(1500, Math.min(dAB, dBC) / 4);
+                        if (dAB >= 3000 && dBC >= 3000 && dAC <= umbralVecinos) {
+                            ultimaLimpiezaTimeline++;
+                            continue;
+                        }
+                        res.push(b);
+                    }
+                    res.push(arr[arr.length - 1]);
+                    arr = res;
+                }
+                return arr;
+            };
+
+            // Formato clásico Records.json y formatos semánticos mensuales.
+            if (data && Array.isArray(data.locations)) parsePathArray(data.locations, null);
+            if (data && Array.isArray(data.timelineObjects)) data.timelineObjects.forEach(incorporar);
+            if (data && Array.isArray(data.semanticSegments)) data.semanticSegments.forEach(incorporar);
+            if (data && Array.isArray(data.timelineSegments)) data.timelineSegments.forEach(incorporar);
+            // Formato de exportación del teléfono: si no encontramos estructuras
+            // conocidas, se recorre el objeto completo buscando puntos geo: y lat/lng.
+            if (!out.length) walk(data, null, null, 0);
+
+            const limpio = quitarPuntasDeRecta(out);
+            limpio.sort((a, b) => a.ts - b.ts);
+            // Quita la marca interna _h antes de devolver los puntos
+            limpio.forEach(p => { delete p._h; });
+            return limpio;
+        }
+
+/* ===== Fin parser ===== */
+
+const $ = id => document.getElementById(id);
+let puntosLimpios = [];
+let porDia = new Map(); // 'YYYY-MM-DD' -> array de puntos
+
+function claveDia(ts) {
+  const d = new Date(Number(ts));
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function distM(a, b) {
+  const r = Math.PI / 180;
+  const h = Math.sin((b.lat - a.lat) * r / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin((b.lng - a.lng) * r / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(Math.max(0, 1 - h)));
+}
+function kmDia(arr) {
+  let t = 0;
+  for (let i = 1; i < arr.length; i++) t += distM(arr[i-1], arr[i]);
+  return t;
+}
+function estado(txt) { $('estado').textContent = txt; }
+
+function descargar(nombre, puntos) {
+  const locations = puntos.map(p => {
+    const o = { latitude: p.lat, longitude: p.lng, timestampMs: String(Math.round(p.ts)) };
+    if (p.accuracy != null) o.accuracy = p.accuracy;
+    return o;
+  });
+  const blob = new Blob([JSON.stringify({ locations })], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = nombre;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+function renderResumen() {
+  const tbody = $('tabla-dias');
+  const dias = [...porDia.keys()].sort();
+  tbody.innerHTML = dias.map(dia => {
+    const pts = porDia.get(dia);
+    return `<tr>
+      <td><strong>${dia}</strong></td>
+      <td style="text-align:right">${pts.length.toLocaleString('es')}</td>
+      <td style="text-align:right">${kmDia(pts).toFixed(1)} km</td>
+      <td style="text-align:right"><button class="sec" style="padding:4px 10px; font-size:.75rem" onclick="descargar('Timeline-${dia}.json', porDia.get('${dia}'))">⬇️ Día</button></td>
+    </tr>`;
+  }).join('');
+  const rep = '✅ ' + puntosLimpios.length.toLocaleString('es') + ' puntos válidos' +
+    (ultimaLimpiezaTimeline ? ' · 🧹 ' + ultimaLimpiezaTimeline.toLocaleString('es') + ' redundantes descartados' : '');
+  $('resumen-limpieza').textContent = rep;
+  $('card-resumen').classList.remove('oculto');
+}
+
+$('archivo').addEventListener('change', (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  $('card-resumen').classList.add('oculto');
+  estado('⏳ Leyendo ' + file.name + ' (' + (file.size / 1048576).toFixed(1) + ' MB)… puede tardar unos segundos.');
+  setTimeout(async () => {
+    try {
+      const text = await file.text();
+      estado('⏳ Archivo leído. Analizando puntos GPS…');
+      setTimeout(() => {
+        try {
+          const data = JSON.parse(text);
+          puntosLimpios = parseGoogleTimelineJson(data);
+          if (!puntosLimpios.length) {
+            estado('⚠️ No se encontraron puntos GPS en el archivo. ¿Es la exportación de Timeline del teléfono o de Takeout?');
+            return;
+          }
+          porDia = new Map();
+          puntosLimpios.forEach(p => {
+            const k = claveDia(p.ts);
+            if (!porDia.has(k)) porDia.set(k, []);
+            porDia.get(k).push(p);
+          });
+          estado('✅ Listo: ' + file.name + ' procesado.');
+          renderResumen();
+        } catch (err) {
+          console.error(err);
+          estado('❌ El archivo no parece ser un JSON válido de Google Timeline.');
+        }
+      }, 30);
+    } catch (err) {
+      estado('❌ No se pudo leer el archivo: ' + (err.message || err));
+    }
+  }, 30);
+});
+
+$('btn-todo').addEventListener('click', () => {
+  if (puntosLimpios.length) descargar('Timeline-limpio.json', puntosLimpios);
+});
+</script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a398a224cd6da12e',t:'MTc4OTE1MDI3MA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>

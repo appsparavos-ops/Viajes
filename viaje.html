@@ -92,7 +92,7 @@
             </h1>
             <div class="w-24 h-1 bg-amber-600 mx-auto mt-8 mb-6"></div>
             <p id="subtitulo" class="text-gray-500 italic text-xl font-serif">Preparando el viaje...</p>
-            <div id="selector-viajes-container" class="mt-6 hidden flex flex-wrap items-center justify-center gap-3">
+            <div id="selector-viajes-container" class="hidden flex flex-wrap items-center justify-end gap-2 absolute top-4 right-4 z-20 max-w-[calc(100%-2rem)]">
                 <div class="inline-flex items-center gap-1.5 bg-gray-50/90 border border-gray-300 rounded-lg px-3 py-1.5 shadow-sm">
                     <span class="text-xs font-bold text-amber-800 uppercase tracking-wider">👤 Viajero:</span>
                     <select id="select-usuario-publico" onchange="cambiarUsuarioPublico(this.value)" class="bg-transparent text-gray-800 text-sm font-serif font-bold focus:outline-none cursor-pointer">
@@ -1024,7 +1024,7 @@
                 puntos.sort((a, b) => (Number(a.ts) || 0) - (Number(b.ts) || 0));
             }
 
-            puntosActivos = puntos.filter(p => Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng)));
+            puntosActivos = filtrarSaltosDeIdaYVuelta(puntos.filter(p => Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng))));
 
             if (puntosActivos.length === 0) {
                 if (emptyOverlay) emptyOverlay.classList.remove('hidden');
@@ -1340,9 +1340,34 @@
             return total / 1000;
         }
 
+        /* Quita la "punta" de una recta de ida y vuelta: si B está a kilómetros de
+           A y de C, pero A y C están juntos, esa recta es un artefacto de los sellos
+           de hora de la exportación de Google (extremos de tramo mal fechados), no
+           un desplazamiento real. Protege también los datos importados con versiones
+           anteriores del parser. */
+        function filtrarSaltosDeIdaYVuelta(pts) {
+            if (!Array.isArray(pts) || pts.length < 4) return pts;
+            let arr = pts;
+            for (let pasada = 0; pasada < 2; pasada++) {
+                const res = [arr[0]];
+                for (let i = 1; i < arr.length - 1; i++) {
+                    const a = res[res.length - 1], b = arr[i], c = arr[i + 1];
+                    const dAB = distanciaMetros(a, b), dBC = distanciaMetros(b, c), dAC = distanciaMetros(a, c);
+                    const umbralVecinos = Math.max(1500, Math.min(dAB, dBC) / 4);
+                    if (dAB >= 3000 && dBC >= 3000 && dAC <= umbralVecinos) {
+                        continue; // punta de la recta: se descarta
+                    }
+                    res.push(b);
+                }
+                res.push(arr[arr.length - 1]);
+                arr = res;
+            }
+            return arr;
+        }
+
         initPublicApp();
     </script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
 <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a38aa6751ba4dd2e',t:'MTc4OTAwMzY0Ng=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3985f9b68dec80f',t:'MTc4OTE0NzU0NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3992f0dfbeda78a',t:'MTc4OTE1NjA0MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>

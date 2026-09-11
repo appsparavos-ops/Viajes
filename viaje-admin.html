@@ -272,6 +272,11 @@
                         <div>
                             <h3 class="text-sm font-bold text-amber-900">📥 Importar ruta de Google Maps</h3>
                             <p class="text-xs text-amber-800 mt-1">Desde Google Maps exportá Timeline.json o location-history.json y seleccioná el archivo aquí.</p>
+                            <p class="text-xs text-amber-800 mt-1.5">
+                                ¿Tu Timeline.json pesa varios MB o la ruta va a ser del año pasado o anterior?
+                                <a href="recortar-timeline.html" target="_blank" rel="noopener" class="font-bold underline decoration-amber-500 underline-offset-2 hover:text-amber-950">🧹 Abrí el Limpiador de Timeline</a>:
+                                lo procesa en tu navegador y genera un archivo chico y depurado, ideal para importar acá.
+                            </p>
                         </div>
                         <input type="file" id="timeline-file-input" accept=".json,application/json,text/json" class="hidden">
                         <button type="button" onclick="seleccionarArchivoTimeline()" class="px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white rounded-lg text-sm font-bold">Elegir archivo JSON</button>
@@ -1660,67 +1665,151 @@
             return null;
         }
 
+        let ultimaLimpiezaTimeline = 0; // puntos descartados por redundancia en el último parse
+
         function parseGoogleTimelineJson(data) {
             const out = [];
             const seen = new Set();
-            const add = (coords, ts, accuracy) => {
+            ultimaLimpiezaTimeline = 0;
+            const add = (coords, ts, accuracy, horaPropia) => {
                 if (!coords || !Number.isFinite(coords.lat) || !Number.isFinite(coords.lng) || Math.abs(coords.lat) > 90 || Math.abs(coords.lng) > 180) return;
                 const t = parseTimestampRuta(ts);
                 if (!t) return;
-                const p = { lat: coords.lat, lng: coords.lng, ts: t, accuracy: Number.isFinite(Number(accuracy)) ? Number(accuracy) : null };
+                const p = { lat: coords.lat, lng: coords.lng, ts: t, accuracy: Number.isFinite(Number(accuracy)) ? Number(accuracy) : null, _h: horaPropia ? 1 : 0 };
                 const key = p.lat.toFixed(6) + '|' + p.lng.toFixed(6) + '|' + p.ts;
                 if (seen.has(key)) return;
                 seen.add(key);
                 out.push(p);
             };
 
+            // Claves con la hora del PROPIO punto (no heredada del segmento que lo contiene)
+            const HORAS_PROPIAS = ['timestampMs', 'timestamp', 'time'];
+
             const pointTimestamp = (obj, fallback) => {
                 if (!obj || typeof obj !== 'object') return fallback;
-                return obj.timestampMs || obj.timestamp || obj.time || obj.startTimestamp || obj.startTime ||
-                    (obj.duration && (obj.duration.startTimestamp || obj.duration.startTime)) || fallback;
+                return obj.timestampMs || obj.timestamp || obj.time || obj.startTimestamp || obj.startTime || obj.startTimestampMs ||
+                    (obj.duration && (obj.duration.startTimestamp || obj.duration.startTime || obj.duration.startTimestampMs)) || fallback;
             };
+
+            // Las claves que representan la LLEGADA de un segmento deben llevar la
+            // hora de FIN del tramo; si se sellan con la de inicio, al ordenar por
+            // hora el destino queda pegado al origen y el reproductor dibuja
+            // primero una línea recta origen→destino.
+            const endTimestamp = (obj, fallback) => {
+                if (!obj || typeof obj !== 'object') return fallback;
+                return obj.endTimestamp || obj.endTime || obj.endTimestampMs ||
+                    (obj.duration && (obj.duration.endTimestamp || obj.duration.endTime || obj.duration.endTimestampMs)) || fallback;
+            };
+            const esClaveLlegada = (key) => /^(end|endlocation|destination)$/i.test(key);
 
             const parsePathArray = (arr, fallbackTs) => {
                 if (!Array.isArray(arr)) return;
                 arr.forEach(item => {
-                    if (typeof item === 'string') add(coordsDesdeTimeline(item), fallbackTs, null);
-                    else if (item && typeof item === 'object') add(coordsDesdeTimeline(item), pointTimestamp(item, fallbackTs), item.accuracy || (item.coords && item.coords.accuracy));
+                    if (typeof item === 'string') add(coordsDesdeTimeline(item), fallbackTs, null, false);
+                    else if (item && typeof item === 'object') {
+                        const propio = HORAS_PROPIAS.some(k => item[k] != null);
+                        add(coordsDesdeTimeline(item), pointTimestamp(item, fallbackTs), item.accuracy || (item.coords && item.coords.accuracy), propio);
+                    }
                 });
             };
 
-            const walk = (node, fallbackTs, depth) => {
+            const CLAVES_PATH = ['timelinePath', 'waypointPath', 'path', 'points', 'locations', 'rawLocations', 'waypoints'];
+
+            const walk = (node, fallbackTs, fallbackEndTs, depth) => {
                 if (!node || depth > 12) return;
-                if (Array.isArray(node)) { node.forEach(x => walk(x, fallbackTs, depth + 1)); return; }
+                if (Array.isArray(node)) { node.forEach(x => walk(x, fallbackTs, fallbackEndTs, depth + 1)); return; }
                 if (typeof node !== 'object') return;
                 const ownTs = pointTimestamp(node, fallbackTs);
+                const ownEndTs = endTimestamp(node, fallbackEndTs);
                 const ownCoords = coordsDesdeTimeline(node);
-                if (ownCoords) add(ownCoords, ownTs, node.accuracy || (node.coords && node.coords.accuracy));
-                ['timelinePath', 'waypointPath', 'path', 'points', 'locations', 'rawLocations'].forEach(key => {
+                if (ownCoords) add(ownCoords, ownTs, node.accuracy || (node.coords && node.coords.accuracy), HORAS_PROPIAS.some(k => node[k] != null));
+                CLAVES_PATH.forEach(key => {
                     if (Array.isArray(node[key])) parsePathArray(node[key], ownTs);
+                    else if (node[key] && typeof node[key] === 'object') {
+                        // Formato clásico: waypointPath viene como { waypoints: [...] }
+                        walk(node[key], ownTs, ownEndTs, depth + 1);
+                    }
                 });
                 Object.keys(node).forEach(key => {
                     if (['settings', 'userLocationProfile', 'placeVisit', 'visit', 'topCandidate'].includes(key)) {
                         // Los lugares pueden aportar extremos, pero no deben llenar la ruta
                         // con toda la metadata de Google.
-                        if (key === 'placeVisit' || key === 'visit') walk(node[key], ownTs, depth + 1);
+                        if (key === 'placeVisit' || key === 'visit') walk(node[key], ownTs, ownEndTs, depth + 1);
                         return;
                     }
                     const v = node[key];
-                    if (v && typeof v === 'object' && !['timelinePath', 'waypointPath', 'path', 'points', 'locations', 'rawLocations'].includes(key)) walk(v, ownTs, depth + 1);
+                    if (v && typeof v === 'object' && !CLAVES_PATH.includes(key)) {
+                        walk(v, esClaveLlegada(key) ? ownEndTs : ownTs, ownEndTs, depth + 1);
+                    }
                 });
+            };
+
+            /* Si un segmento tiene al menos 3 puntos con hora PROPIA, su camino granular
+               ya cuenta el recorrido: los puntos sellados con horas heredadas del tramo
+               (extremos de activity, paths en texto plano) son una segunda copia que
+               dibuja la ruta dos veces y genera las rectas origen↔destino. Se descartan.
+               Si NO hay camino con horas (Takeout clásico, vuelos sin detalle), se
+               conserva todo: es la única geometría disponible. */
+            const limpiarSegmento = (desde, hasta) => {
+                const pts = out.slice(desde, hasta);
+                if (!pts.length) return;
+                const conHoraPropia = pts.filter(p => p._h).length;
+                if (conHoraPropia >= 3) {
+                    const limpios = pts.filter(p => p._h);
+                    ultimaLimpiezaTimeline += (pts.length - limpios.length);
+                    out.splice(desde, hasta - desde, ...limpios);
+                }
+            };
+            const incorporar = (x) => {
+                const antes = out.length;
+                walk(x, null, null, 0);
+                limpiarSegmento(antes, out.length);
+            };
+
+            const distM = (a, b) => {
+                const r = Math.PI / 180;
+                const h = Math.sin((b.lat - a.lat) * r / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin((b.lng - a.lng) * r / 2) ** 2;
+                return 6371000 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(Math.max(0, 1 - h)));
+            };
+
+            // Quita la "punta" de una recta de ida y vuelta: B queda a kilómetros de
+            // A y de C, pero A y C están juntos → la recta era un artefacto del sello
+            // de hora, no un desplazamiento real.
+            const quitarPuntasDeRecta = (pts) => {
+                if (!Array.isArray(pts) || pts.length < 4) return pts;
+                let arr = pts;
+                for (let pasada = 0; pasada < 2; pasada++) {
+                    const res = [arr[0]];
+                    for (let i = 1; i < arr.length - 1; i++) {
+                        const a = res[res.length - 1], b = arr[i], c = arr[i + 1];
+                        const dAB = distM(a, b), dBC = distM(b, c), dAC = distM(a, c);
+                        const umbralVecinos = Math.max(1500, Math.min(dAB, dBC) / 4);
+                        if (dAB >= 3000 && dBC >= 3000 && dAC <= umbralVecinos) {
+                            ultimaLimpiezaTimeline++;
+                            continue;
+                        }
+                        res.push(b);
+                    }
+                    res.push(arr[arr.length - 1]);
+                    arr = res;
+                }
+                return arr;
             };
 
             // Formato clásico Records.json y formatos semánticos mensuales.
             if (data && Array.isArray(data.locations)) parsePathArray(data.locations, null);
-            if (data && Array.isArray(data.timelineObjects)) data.timelineObjects.forEach(x => walk(x, null, 0));
-            if (data && Array.isArray(data.semanticSegments)) data.semanticSegments.forEach(x => walk(x, null, 0));
-            if (data && Array.isArray(data.timelineSegments)) data.timelineSegments.forEach(x => walk(x, null, 0));
+            if (data && Array.isArray(data.timelineObjects)) data.timelineObjects.forEach(incorporar);
+            if (data && Array.isArray(data.semanticSegments)) data.semanticSegments.forEach(incorporar);
+            if (data && Array.isArray(data.timelineSegments)) data.timelineSegments.forEach(incorporar);
             // Formato de exportación del teléfono: si no encontramos estructuras
             // conocidas, se recorre el objeto completo buscando puntos geo: y lat/lng.
-            if (!out.length) walk(data, null, 0);
+            if (!out.length) walk(data, null, null, 0);
 
-            out.sort((a, b) => a.ts - b.ts);
-            return out;
+            const limpio = quitarPuntasDeRecta(out);
+            limpio.sort((a, b) => a.ts - b.ts);
+            // Quita la marca interna _h antes de devolver los puntos
+            limpio.forEach(p => { delete p._h; });
+            return limpio;
         }
 
         async function importarArchivoTimeline(file) {
@@ -1757,7 +1846,10 @@
                 record.googleArchivo = file.name || 'Timeline.json';
                 setRutaCache(record);
                 renderRutaUI(record);
-                if (status) status.textContent = '✅ Importados ' + puntos.length + ' puntos de Google Maps para ' + fecha + '.';
+                if (status) {
+                    status.textContent = '✅ Importados ' + puntos.length + ' puntos de Google Maps para ' + fecha + '.' +
+                        (ultimaLimpiezaTimeline > 0 ? ' Se descartaron ' + ultimaLimpiezaTimeline + ' puntos redundantes del archivo (extremos duplicados y puntas de rectas).' : '');
+                }
                 toast('✅ Ruta de Google Maps importada.');
                 SyncManager.updateUI();
             } catch (e) {
@@ -3531,6 +3623,6 @@
         }
     </script>
 <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a34e72f27c4c11e8',t:'MTc4ODM3MjM5MA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a38aa65e2e78dd2e',t:'MTc4OTAwMzY0Mg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a38fc1d1be6ac1a0',t:'MTc4OTA1NzE5NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3981043dddea58f',t:'MTc4OTE0NDI5NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a38aa65e2e78dd2e',t:'MTc4OTAwMzY0Mg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a38fc1d1be6ac1a0',t:'MTc4OTA1NzE5NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3992ef10da8a78a',t:'MTc4OTE1NjAzNw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
+</body>
 </html>
