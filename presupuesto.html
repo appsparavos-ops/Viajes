@@ -104,13 +104,20 @@
             db = firebase.database();
         }
 
+        const urlParams = new URLSearchParams(window.location.search);
+        let currentUsername = urlParams.get('user') || localStorage.getItem('travelapp_active_user') || 'usuario_anonimo';
+
+        function getUserRoot() {
+            return currentUsername || 'usuario_anonimo';
+        }
+
         const TIMEOUT_MS = 6000;
 
         const CACHE = {
-            viajes: 'travelapp_viajes_cache',
-            lastViajeId: 'travelapp_last_viaje_id',
-            lastViaje: 'travelapp_last_viaje',
-            viajeData: id => 'travelapp_viajedata_' + id
+            get viajes() { return 'travelapp_' + getUserRoot() + '_viajes_cache'; },
+            get lastViajeId() { return 'travelapp_' + getUserRoot() + '_last_viaje_id'; },
+            get lastViaje() { return 'travelapp_' + getUserRoot() + '_last_viaje'; },
+            viajeData: id => 'travelapp_' + getUserRoot() + '_viajedata_' + id
         };
 
         let currentViajeId = null;
@@ -237,7 +244,7 @@
         function getRef(path) {
             if (!currentViajeId) { throw new Error('No trip selected'); }
             if (!db) throw new Error('Firebase no disponible');
-            return db.ref(`viajes_data/${currentViajeId}/${path}`);
+            return db.ref(`${getUserRoot()}/viajes_data/${currentViajeId}/${path}`);
         }
 
         async function leer(path, fallbackValue) {
@@ -277,7 +284,7 @@
 
             if (FIREBASE_AVAILABLE && checkIsOnline()) {
                 try {
-                    const snap = await withTimeout(db.ref('viajes_index').once('value'));
+                    const snap = await withTimeout(db.ref(`${getUserRoot()}/viajes_index`).once('value'));
                     if (snap.exists()) {
                         snap.forEach(c => { viajes.push({ ...c.val(), id: c.key }); });
                         viajes.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -305,8 +312,11 @@
                     `<option value="${v.id}">${v.titulo} ${v.activo ? '✅' : '⛔'}</option>`
                 ).join('');
 
+                const urlTripId = urlParams.get('id');
                 const savedId = getCache(CACHE.lastViajeId);
-                if (!currentViajeId || !viajes.find(v => v.id === currentViajeId)) {
+                if (urlTripId && viajes.find(v => v.id === urlTripId)) {
+                    currentViajeId = urlTripId;
+                } else if (!currentViajeId || !viajes.find(v => v.id === currentViajeId)) {
                     currentViajeId = (savedId && viajes.find(v => v.id === savedId))
                         ? savedId
                         : ((viajes.find(v => v.activo) || viajes[0])?.id || null);

@@ -7,14 +7,28 @@
     <script src="lib/tailwindcss.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
     <script src="https://widget.cloudinary.com/v2.0/global/all.js" type="text/javascript"></script>
+    <script src="cordova.js"></script>
     <style>
-        body { font-family: 'Lato', sans-serif; }
+        body {
+            font-family: 'Lato', sans-serif;
+            /* Fondo de página completa: ruta.jpg suavizada con un velo blanco
+               translúcido para que el contenido siga siendo legible.
+               El color base (gris) actúa de respaldo mientras carga o si falta. */
+            background-color: #f3f4f6;
+            background-image: linear-gradient(rgba(255,255,255,0.90), rgba(255,255,255,0.90)), url('ruta.jpg');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        }
         .tab-btn.active { background-color: #d97706; color: white; }
         .spinner { border: 3px solid #f3f4f6; border-top: 3px solid #d97706; border-radius: 50%; width: 28px; height: 28px; animation: spin 0.8s linear infinite; display: inline-block; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .foto-preview { position: relative; }
         .foto-preview button { position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,0.6); color: white; border-radius: 50%; width: 22px; height: 22px; font-size: 14px; cursor: pointer; }
-        #auth-overlay.hidden, #boot-screen.hidden { display: none !important; }
+        #auth-overlay.hidden, #boot-screen.hidden, #fb-warning.hidden, #import-modal.hidden { display: none !important; }
+        #ruta-canvas { display: block; width: 100%; min-height: 280px; border-radius: 0.75rem; }
+        #timeline-import-status { white-space: pre-wrap; }
     </style>
 </head>
 <body class="bg-gray-100 min-h-screen pb-12">
@@ -26,6 +40,11 @@
             <div class="spinner !w-10 !h-10 !border-4 mx-auto"></div>
             <p class="text-sm font-bold text-amber-800 mt-4">Cargando Bitácora de Viaje…</p>
         </div>
+    </div>
+
+    <!-- Aviso cuando Firebase no pudo cargar (p. ej. faltan lib/ o firebase-config.js en el deploy) -->
+    <div id="fb-warning" class="hidden fixed top-0 inset-x-0 z-[200] bg-red-700 text-white text-center text-xs sm:text-sm font-bold py-2 px-4 shadow-lg">
+        ⚠️ Firebase no está disponible. Verificá que en el deploy estén subidos <span style="font-family:monospace">firebase-config.js</span> y la carpeta <span style="font-family:monospace">lib/</span>.
     </div>
 
     <header class="bg-amber-800 text-white py-4 px-6 shadow-md flex items-center justify-between flex-wrap gap-4">
@@ -62,6 +81,12 @@
 
             <!-- Vista 1: Login / Registro con Email o Google -->
             <div id="auth-view-credentials" class="p-6">
+                <p id="auth-offline-note" class="hidden text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+                    📵 Sin conexión. Para iniciar sesión la primera vez o tras cerrar sesión necesitás internet. Si ya tenés sesión guardada en este dispositivo, cerrá y reabrí la app.
+                </p>
+                <button type="button" id="btn-modo-borrador" onclick="entrarModoBorrador()" class="hidden w-full mb-4 py-2.5 px-4 bg-amber-700 hover:bg-amber-600 text-white rounded-xl text-sm font-bold shadow-sm transition">
+                    🧾 Continuar sin cuenta (modo borrador local)
+                </button>
                 <div class="flex border-b border-gray-200 mb-5">
                     <button id="auth-tab-login" type="button" onclick="setAuthTab('login')" class="flex-1 pb-3 text-sm font-bold border-b-2 border-amber-600 text-amber-700">Iniciar Sesión</button>
                     <button id="auth-tab-register" type="button" onclick="setAuthTab('register')" class="flex-1 pb-3 text-sm font-bold border-b-2 border-transparent text-gray-500 hover:text-gray-700">Registrarse</button>
@@ -156,11 +181,18 @@
         📵 Sin conexión — Modo offline. Los cambios se guardan en el dispositivo y se sincronizarán automáticamente al volver a internet.
     </div>
 
+    <!-- Aviso de modo borrador local (sin cuenta) -->
+    <div id="banner-borrador" class="hidden bg-amber-100 border-b border-amber-300 text-amber-900 text-sm px-6 py-2 items-center gap-2 flex-wrap">
+        🧾 <span>Modo borrador local: estás trabajando <strong>sin cuenta</strong> y todo se guarda solo en este dispositivo.</span>
+        <button onclick="abrirImportacion()" class="ml-auto text-xs font-bold bg-amber-700 hover:bg-amber-600 text-white px-3 py-1 rounded-lg">Iniciar sesión e importar</button>
+    </div>
+
     <div class="max-w-5xl mx-auto px-4 mt-6">
         <div class="flex gap-2 mb-6 flex-wrap">
             <button onclick="switchTab('tab-nueva')" id="btn-nueva" class="tab-btn active px-5 py-2 rounded-lg font-medium text-sm border border-amber-300">➕ Nueva entrada</button>
             <button onclick="switchTab('tab-entradas')" id="btn-entradas" class="tab-btn px-5 py-2 rounded-lg font-medium text-sm border border-amber-300 bg-white text-gray-700">📓 Entradas</button>
             <button onclick="switchTab('tab-comentarios')" id="btn-comentarios" class="tab-btn px-5 py-2 rounded-lg font-medium text-sm border border-amber-300 bg-white text-gray-700">💬 Comentarios <span id="badge-pendientes" class="ml-1 bg-red-500 text-white text-xs rounded-full px-2 py-0.5 hidden">0</span></button>
+            <button onclick="switchTab('tab-ruta')" id="btn-ruta" class="tab-btn px-5 py-2 rounded-lg font-medium text-sm border border-amber-300 bg-white text-gray-700">🛰 Ruta GPS</button>
             <button onclick="switchTab('tab-finanzas')" id="btn-finanzas" class="tab-btn px-5 py-2 rounded-lg font-medium text-sm border border-amber-300 bg-white text-gray-700">💵 Finanzas y Gastos</button>
         </div>
 
@@ -208,6 +240,75 @@
                     <button onclick="filtrarComentarios('aprobados')" class="px-4 py-1 text-sm bg-green-100 text-green-700 rounded-full">Aprobados</button>
                 </div>
                 <div id="lista-comentarios"><div class="flex justify-center py-8"><div class="spinner"></div></div></div>
+            </div>
+        </div>
+
+        <div id="tab-ruta" class="tab-content hidden space-y-6">
+            <div class="bg-white rounded-2xl shadow p-6">
+                <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-gray-800">🛰 Ruta GPS del día</h2>
+                        <p class="text-xs text-gray-500 mt-1 max-w-2xl">
+                            La APK registra una ruta automática como respaldo, incluso offline. Al importar la exportación de Google Maps, esa ruta pasa a ser la principal.
+                        </p>
+                    </div>
+                    <span id="ruta-plataforma-badge" class="text-xs font-bold px-3 py-1 rounded-full bg-gray-100 text-gray-600">Web / plugin no detectado</span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">Día de la ruta</label>
+                        <input type="date" id="ruta-fecha" class="w-full border rounded-lg px-3 py-2 text-sm" onchange="cargarRutaDelDia()">
+                    </div>
+                    <div class="sm:col-span-2 flex items-end gap-2 flex-wrap">
+                        <button type="button" id="btn-ruta-iniciar" onclick="iniciarRutaAutomatica()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold">▶ Iniciar seguimiento</button>
+                        <button type="button" id="btn-ruta-detener" onclick="detenerRutaAutomatica()" class="hidden px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-bold">⏹ Finalizar seguimiento</button>
+                        <button type="button" onclick="sincronizarRutasAhora()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold">☁️ Subir rutas</button>
+                    </div>
+                </div>
+
+                <div class="border border-dashed border-amber-400 bg-amber-50 rounded-xl p-4 mb-5">
+                    <div class="flex items-center justify-between gap-3 flex-wrap">
+                        <div>
+                            <h3 class="text-sm font-bold text-amber-900">📥 Importar ruta de Google Maps</h3>
+                            <p class="text-xs text-amber-800 mt-1">Desde Google Maps exportá Timeline.json o location-history.json y seleccioná el archivo aquí.</p>
+                        </div>
+                        <input type="file" id="timeline-file-input" accept=".json,application/json,text/json" class="hidden">
+                        <button type="button" onclick="seleccionarArchivoTimeline()" class="px-4 py-2 bg-amber-700 hover:bg-amber-800 text-white rounded-lg text-sm font-bold">Elegir archivo JSON</button>
+                    </div>
+                    <p id="timeline-import-status" class="text-xs text-amber-900 mt-3 hidden"></p>
+                </div>
+
+                <div id="ruta-status" class="text-sm bg-gray-50 border rounded-xl px-4 py-3 mb-4 text-gray-700">
+                    Seleccioná un viaje y un día para ver o registrar la ruta.
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+                    <div class="rounded-xl border border-blue-200 bg-blue-50 p-3">
+                        <p class="text-xs font-bold text-blue-800">Google Maps / Timeline</p>
+                        <p id="ruta-google-resumen" class="text-sm text-blue-950 mt-1">Sin datos importados</p>
+                        <button type="button" id="btn-usar-ruta-google" onclick="elegirFuenteRuta('google')" class="hidden mt-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg">Usar esta ruta</button>
+                    </div>
+                    <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                        <p class="text-xs font-bold text-emerald-800">Ruta automática de la APK</p>
+                        <p id="ruta-auto-resumen" class="text-sm text-emerald-950 mt-1">Sin puntos registrados</p>
+                        <button type="button" id="btn-usar-ruta-auto" onclick="elegirFuenteRuta('automatica')" class="hidden mt-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg">Usar esta ruta</button>
+                    </div>
+                    <div class="rounded-xl border border-purple-200 bg-purple-50 p-3">
+                        <p class="text-xs font-bold text-purple-800">Ruta que se mostrará</p>
+                        <p id="ruta-principal-resumen" class="text-sm text-purple-950 mt-1">Sin ruta seleccionada</p>
+                        <button type="button" onclick="guardarRutaDelDia()" class="mt-2 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg">💾 Guardar selección</button>
+                    </div>
+                </div>
+
+                <div class="rounded-xl border bg-gray-50 p-3">
+                    <div class="flex items-center justify-between gap-2 flex-wrap mb-2">
+                        <h3 class="text-sm font-bold text-gray-700">Vista esquemática de la ruta</h3>
+                        <span id="ruta-stats" class="text-xs text-gray-500"></span>
+                    </div>
+                    <canvas id="ruta-canvas" height="280" aria-label="Vista de la ruta GPS"></canvas>
+                    <p class="text-[11px] text-gray-500 mt-2">La vista funciona offline. Para un mapa con calles se puede agregar una base cartográfica descargada o cargar los mosaicos cuando haya conexión.</p>
+                </div>
             </div>
         </div>
 
@@ -377,6 +478,18 @@
         </div>
     </div>
 
+    <!-- Modal de importacion de datos guardados sin cuenta -->
+    <div id="import-modal" class="hidden fixed inset-0 bg-gray-900/70 backdrop-blur-sm z-[120] items-center justify-center p-4">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6">
+            <h3 class="text-lg font-bold text-gray-800 mb-2">📥 Datos sin cuenta encontrados</h3>
+            <p id="import-modal-resumen" class="text-sm text-gray-600 mb-5"></p>
+            <div class="flex gap-3">
+                <button onclick="confirmarImportacion()" class="flex-1 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-bold transition">Importar a mi cuenta</button>
+                <button onclick="descartarImportacion()" class="flex-1 py-2.5 border border-gray-300 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-100 transition">Descartar</button>
+            </div>
+        </div>
+    </div>
+
     <div id="toast" class="fixed bottom-6 right-6 bg-gray-800 text-white px-5 py-3 rounded-xl hidden z-50 shadow-xl"></div>
 
     <script src="lib/firebase-app-compat.js"></script>
@@ -399,7 +512,22 @@
         let auth = null;
         let isFirebaseConnected = false;
         let authUser = null;
-        let currentUsername = localStorage.getItem('travelapp_active_user') || null;
+        // Defensa: nunca tratar el string "null" ni vacío como un usuario real
+        let currentUsername = (function () {
+            try {
+                const v = (localStorage.getItem('travelapp_active_user') || '').trim();
+                return (v && v !== 'null') ? v : null;
+            } catch (e) { return null; }
+        })();
+
+        /* ---- Modo borrador local (sin cuenta) ----
+           Permite usar la app en un dispositivo que nunca inicio sesion y sin
+           internet (p. ej. se instala la app durante el viaje). Todo se guarda
+           SOLO en este dispositivo; al iniciar sesion por primera vez se ofrece
+           importar esos datos a la cuenta. */
+        const DRAFT_USER = '_borrador_local';
+        const DRAFT_FLAG_KEY = 'travelapp_modo_borrador';
+        let modoBorrador = false;
 
         function getUserRoot() {
             return currentUsername || 'usuario_anonimo';
@@ -430,7 +558,7 @@
                 .slice(0, 25);
         }
 
-        const RESERVED_USERNAMES = new Set(['usernames', 'users', 'viajes_index', 'viajes_data', 'admin', 'api', 'auth', 'null', 'undefined', 'root', 'config']);
+        const RESERVED_USERNAMES = new Set(['usernames', 'users', 'viajes_index', 'viajes_data', 'admin', 'api', 'auth', 'null', 'undefined', 'root', 'config', '_borrador_local', 'borrador', 'borrador_local', 'usuario_anonimo']);
 
         function validateUsernameFormat(username) {
             if (!username || username.length < 3) {
@@ -507,6 +635,7 @@
             // ocultamos la pantalla de carga en el mismo instante en que se muestra
             // el modal (sin parpadeos intermedios).
             hideBootScreen();
+            actualizarAvisoOffline();
             const overlay = document.getElementById('auth-overlay');
             const credView = document.getElementById('auth-view-credentials');
             const userView = document.getElementById('auth-view-username');
@@ -540,14 +669,53 @@
             if (b) b.classList.add('hidden');
         }
 
+        /* ---- Detección de entorno: app instalada vs. navegador web ----
+           En las apps empaquetadas (Electron para MSI, WebView/Capacitor/Cordova para
+           APK) el dispositivo es personal y conviene una sesión persistente que
+           sobreviva al cierre, para poder entrar sin conexión durante el viaje.
+           En el navegador web se mantiene la política estricta (cerrar al cerrar la
+           pestaña). Se puede forzar el modo con window.__APP_INSTALADA = true/false. */
+        function esAppInstalada() {
+            try {
+                if (typeof window.__APP_INSTALADA === 'boolean') return window.__APP_INSTALADA;
+            } catch (e) { /* ignorar */ }
+            const ua = (navigator.userAgent || '');
+            const cap = (typeof window.Capacitor !== 'undefined') ? window.Capacitor : null;
+            const esCapacitor = !!(cap && (
+                (typeof cap.isNativePlatform === 'function' && cap.isNativePlatform()) ||
+                (typeof cap.isNative === 'function' && cap.isNative())
+            ));
+            const esCordova = (typeof window.cordova !== 'undefined');
+            const esWebViewAndroid = ua.indexOf('Android') !== -1 && /(wv|webview)/i.test(ua);
+            return !!(ua.indexOf('Electron') !== -1 || esCapacitor || esCordova || esWebViewAndroid);
+        }
+
+        function hayConexion() {
+            return typeof navigator !== 'undefined' && navigator.onLine !== false;
+        }
+
+        function actualizarAvisoOffline() {
+            const note = document.getElementById('auth-offline-note');
+            const btnDraft = document.getElementById('btn-modo-borrador');
+            const offline = !hayConexion();
+            if (note) note.classList.toggle('hidden', !offline);
+            // La opcion de trabajar sin cuenta se ofrece cuando no hay conexion
+            // (primera vez en un dispositivo sin internet).
+            if (btnDraft) btnDraft.classList.toggle('hidden', !offline);
+        }
+
         function tieneSesionGuardada() {
             // Busca si existe un token de sesión Firebase en el almacenamiento de la
-            // pestaña (persistencia SESSION). Si existe, la sesión se está restaurando
+            // pestaña (SESSION → sessionStorage) o del dispositivo (LOCAL →
+            // localStorage, apps instaladas). Si existe, la sesión se está restaurando
             // y hay que esperarla antes de pedir el login.
             try {
-                for (let i = 0; i < sessionStorage.length; i++) {
-                    const k = sessionStorage.key(i);
-                    if (k && k.indexOf('firebase:authUser:') === 0) return true;
+                const almacenes = [sessionStorage, localStorage];
+                for (const st of almacenes) {
+                    for (let i = 0; i < st.length; i++) {
+                        const k = st.key(i);
+                        if (k && k.indexOf('firebase:authUser:') === 0) return true;
+                    }
                 }
             } catch (e) { /* ignorar */ }
             return false;
@@ -712,6 +880,7 @@
         }
 
         async function cerrarSesion() {
+            if (modoBorrador) { salirModoBorrador(); return; }
             if (!confirm('¿Deseas cerrar tu sesión actual?')) return;
             try {
                 if (auth && typeof auth.signOut === 'function') await auth.signOut();
@@ -748,21 +917,226 @@
             if (scannerBtn) {
                 scannerBtn.href = `scanner.html?user=${encodeURIComponent(user)}${currentViajeId ? `&id=${encodeURIComponent(currentViajeId)}` : ''}`;
             }
+
+            // En modo borrador las tres páginas funcionan con los datos locales:
+            // viaje.html, presupuesto.html y scanner.html leen la misma caché.
+            [presupuestoBtn, scannerBtn].forEach(btn => {
+                if (!btn) return;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                btn.removeAttribute('title');
+                btn.onclick = null;
+            });
         }
 
         function onUserAuthenticated() {
             hideBootScreen(); // sesión confirmada: revelamos el panel (sin parpadeos)
+            hideAuthModal();
+            // Solo mostrar la barra de usuario si hay un nombre de usuario real.
+            // Evita pintar "@null" en escenarios degradados.
+            if (currentUsername) {
+                const infoBar = document.getElementById('user-info-bar');
+                const nameEl = document.getElementById('current-user-name');
+                if (infoBar && nameEl) {
+                    infoBar.classList.remove('hidden');
+                    infoBar.classList.add('flex');
+                    nameEl.textContent = modoBorrador ? 'Borrador local (sin cuenta)' : `@${currentUsername}`;
+                }
+            }
+            definirAvisoImportacion(modoBorrador);
+            SyncManager.loadQueue();
+            updateNavigationLinks();
+            initAdminGlobal().then(() => {
+                actualizarBadgeComentarios();
+                if (typeof importarPuntosPersistidosDelPlugin === 'function') importarPuntosPersistidosDelPlugin();
+                // Si quedaron datos sin cuenta de un modo borrador anterior, ofrecerlos importar.
+                if (!modoBorrador) setTimeout(ofrecerImportarBorradores, 700);
+            });
+        }
+
+        /* ---------------- Modo borrador local: estado e importacion ---------------- */
+        function hayModoBorradorActivo() {
+            try { return localStorage.getItem(DRAFT_FLAG_KEY) === '1'; } catch (e) { return false; }
+        }
+
+        function clavesBorrador() {
+            const pref = 'travelapp_' + DRAFT_USER;
+            const out = [];
+            try {
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    if (k && k.indexOf(pref) === 0) out.push(k);
+                }
+            } catch (e) { /* ignorar */ }
+            return out;
+        }
+
+        function resumenBorradores() {
+            // Cuenta viajes y operaciones pendientes guardadas en modo borrador.
+            let viajes = 0, pendientes = 0, rutas = 0;
+            try {
+                const v = getCache('travelapp_' + DRAFT_USER + '_viajes_cache');
+                if (Array.isArray(v)) viajes = v.length;
+                const q = getCache('travelapp_' + DRAFT_USER + '_syncQueue');
+                if (Array.isArray(q)) pendientes = q.length;
+                rutas = rutasLocalesDeUsuario(DRAFT_USER).filter(r => r.google.length || r.automatica.length).length;
+            } catch (e) { /* ignorar */ }
+            return { viajes: viajes, pendientes: pendientes, rutas: rutas, hay: viajes > 0 || pendientes > 0 || rutas > 0 };
+        }
+
+        function hayBorradoresPendientes() {
+            return clavesBorrador().length > 0 && resumenBorradores().hay;
+        }
+
+        function definirAvisoImportacion(mostrar) {
+            const b = document.getElementById('banner-borrador');
+            if (b) b.classList.toggle('hidden', !mostrar);
+        }
+
+        function entrarModoBorrador() {
+            modoBorrador = true;
+            authUser = null;
+            currentUsername = DRAFT_USER;
+            try { localStorage.setItem(DRAFT_FLAG_KEY, '1'); } catch (e) {}
+            hideBootScreen();
             hideAuthModal();
             const infoBar = document.getElementById('user-info-bar');
             const nameEl = document.getElementById('current-user-name');
             if (infoBar && nameEl) {
                 infoBar.classList.remove('hidden');
                 infoBar.classList.add('flex');
-                nameEl.textContent = `@${currentUsername}`;
+                nameEl.textContent = 'Borrador local (sin cuenta)';
             }
+            definirAvisoImportacion(true);
             SyncManager.loadQueue();
             updateNavigationLinks();
-            initAdminGlobal().then(() => actualizarBadgeComentarios());
+            initAdminGlobal().then(() => {
+                actualizarBadgeComentarios();
+                if (typeof importarPuntosPersistidosDelPlugin === 'function') importarPuntosPersistidosDelPlugin();
+            });
+        }
+
+        function salirModoBorrador() {
+            // Los datos locales NO se borran: se conservan hasta importarlos o descartarlos.
+            if (!confirm('¿Salir del modo borrador? Los datos guardados en este dispositivo se conservan y podrás importarlos al iniciar sesión.')) return;
+            modoBorrador = false;
+            try { localStorage.removeItem(DRAFT_FLAG_KEY); } catch (e) {}
+            currentUsername = null;
+            definirAvisoImportacion(false);
+            window.location.reload();
+        }
+
+        function abrirImportacion() {
+            // Abre el login: al autenticarse se ofrece importar automaticamente.
+            showAuthModal('credentials');
+        }
+
+        async function importarBorradores() {
+            const draftQueue = getCache('travelapp_' + DRAFT_USER + '_syncQueue') || [];
+            const draftViajes = getCache('travelapp_' + DRAFT_USER + '_viajes_cache') || [];
+            const base = getUserRoot();
+            let ok = 0, err = 0;
+
+            // 1) Recrear el indice de viajes del borrador (idempotente por id).
+            //    Se omiten los viajes que ya tienen su operacion en la cola, para no
+            //    escribir dos veces el mismo dato.
+            const enCola = new Set();
+            for (const op of draftQueue) {
+                if (op && op.isGlobal && typeof op.path === 'string' && op.path.indexOf('viajes_index/') === 0) {
+                    enCola.add(op.path.slice('viajes_index/'.length));
+                }
+            }
+            for (const v of (Array.isArray(draftViajes) ? draftViajes : [])) {
+                if (!v || !v.id || enCola.has(v.id)) continue;
+                try {
+                    const datos = Object.assign({}, v);
+                    delete datos.id;
+                    await db.ref(base + '/viajes_index/' + v.id).set(normalizeTimestamps(deepClone(datos), 'server'));
+                    ok++;
+                } catch (e) { console.error('Error importando viaje', v && v.id, e); err++; }
+            }
+
+            // 2) Replay de la cola del borrador bajo la cuenta. La cola guarda rutas
+            //    relativas a la raiz del usuario, por lo que es portable.
+            for (const op of draftQueue) {
+                try {
+                    const ref = op.isGlobal
+                        ? db.ref(base + '/' + op.path)
+                        : db.ref(base + '/viajes_data/' + op.viajeId + '/' + op.path);
+                    const payload = (op.data && typeof op.data === 'object' && !Array.isArray(op.data))
+                        ? encodeObjectKeys(op.data) : op.data;
+                    if (op.action === 'set') await ref.set(normalizeTimestamps(deepClone(payload), 'server'));
+                    else if (op.action === 'update') await ref.update(normalizeTimestamps(deepClone(payload), 'server'));
+                    else if (op.action === 'remove') await ref.remove();
+                    ok++;
+                } catch (e) { console.error('Error importando operacion', op, e); err++; }
+            }
+
+            // 3) Importar las rutas híbridas guardadas en modo borrador local.
+            try {
+                const rutasImportadas = await importarRutasDeUsuario(DRAFT_USER, base);
+                ok += rutasImportadas;
+            } catch (e) {
+                console.error('Error importando rutas locales', e);
+                err++;
+            }
+            return { ok: ok, err: err };
+        }
+
+        function limpiarBorradores() {
+            clavesBorrador().forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
+            try { localStorage.removeItem(DRAFT_FLAG_KEY); } catch (e) {}
+        }
+
+        function ofrecerImportarBorradores() {
+            if (modoBorrador) return;
+            if (!hayBorradoresPendientes()) return;
+            const modal = document.getElementById('import-modal');
+            if (!modal) return;
+            const resumen = resumenBorradores();
+            const txt = document.getElementById('import-modal-resumen');
+            if (txt) {
+                const partes = [];
+                if (resumen.viajes) partes.push(resumen.viajes + ' viaje' + (resumen.viajes === 1 ? '' : 's'));
+                if (resumen.pendientes) partes.push(resumen.pendientes + ' cambio' + (resumen.pendientes === 1 ? '' : 's') + ' sin subir');
+                if (resumen.rutas) partes.push(resumen.rutas + ' ruta' + (resumen.rutas === 1 ? '' : 's'));
+                txt.textContent = 'Encontramos datos sin cuenta en este dispositivo (' + (partes.join(' y ') || 'datos locales') + '). ¿Querés importarlos a @' + getUserRoot() + '?';
+            }
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        async function confirmarImportacion() {
+            const modal = document.getElementById('import-modal');
+            if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+            toast('Importando datos a tu cuenta…');
+            const r = await importarBorradores();
+            limpiarBorradores();
+            definirAvisoImportacion(false);
+            toast(r.err ? ('Importacion con avisos: ' + r.ok + ' ok, ' + r.err + ' con error.') : ('✅ Importados ' + r.ok + ' elementos a tu cuenta.'));
+            await initAdminGlobal();
+        }
+
+        function descartarImportacion() {
+            if (!confirm('¿Descartar los datos guardados sin cuenta en este dispositivo? No se puede deshacer.')) return;
+            const modal = document.getElementById('import-modal');
+            if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+            limpiarBorradores();
+            definirAvisoImportacion(false);
+            toast('Datos locales descartados.');
+        }
+
+        function mostrarSinFirebase() {
+            // Firebase no cargó: ocultamos la carga y el modal, ocultamos la barra de
+            // usuario (nada de sesiones falsas) y mostramos un aviso persistente.
+            hideBootScreen();
+            hideAuthModal();
+            const infoBar = document.getElementById('user-info-bar');
+            if (infoBar) {
+                infoBar.classList.add('hidden');
+                infoBar.classList.remove('flex');
+            }
+            const warn = document.getElementById('fb-warning');
+            if (warn) warn.classList.remove('hidden');
         }
 
         if (FIREBASE_AVAILABLE) {
@@ -771,32 +1145,41 @@
                 db = firebase.database();
                 auth = firebase.auth();
 
-                // ---- Política de sesión: dura lo que dura la pestaña ----
-                // 1) Borrar tokens de persistencia LOCAL (claves firebase:authUser:* en
-                //    localStorage) que dejaron versiones anteriores con "recordarme
-                //    siempre". Si no se limpian, la sesión sobreviviría al cierre de la
-                //    pestaña/navegador. Se hace antes de restaurar el estado de auth para
-                //    evitar que se vuelva a autenticar desde localStorage.
-                try {
-                    const staleKeys = [];
-                    for (let i = 0; i < localStorage.length; i++) {
-                        const k = localStorage.key(i);
-                        if (k && k.indexOf('firebase:authUser:') === 0) staleKeys.push(k);
+                // ---- Política de sesión según el entorno ----
+                // • Apps instaladas (Electron/WebView/Capacitor): persistencia LOCAL.
+                //   El dispositivo es personal; la sesión sobrevive al cierre de la app
+                //   para poder entrar sin conexión durante el viaje. El botón "Salir"
+                //   borra esa sesión del dispositivo.
+                // • Navegador web: persistencia SESSION. La sesión dura lo que dura la
+                //   pestaña (se cierra al cerrarla), como política de privacidad.
+                const appInstalada = esAppInstalada();
+                if (appInstalada) {
+                    try {
+                        auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(err =>
+                            console.warn('No se pudo fijar persistencia LOCAL:', err)
+                        );
+                    } catch (e) {
+                        console.warn('Error configurando persistencia LOCAL:', e);
                     }
-                    staleKeys.forEach(k => localStorage.removeItem(k));
-                } catch (e) {
-                    console.warn('No se pudieron limpiar tokens de sesión locales:', e);
-                }
-
-                // 2) Persistencia SESSION: la sesión sobrevive a recargas y a la
-                //    navegación admin <-> presupuesto dentro de la misma pestaña, pero
-                //    se descarta al cerrar la pestaña o el navegador.
-                try {
-                    auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(err =>
-                        console.warn('No se pudo fijar persistencia SESSION:', err)
-                    );
-                } catch (e) {
-                    console.warn('Error configurando persistencia SESSION:', e);
+                } else {
+                    // Web: limpiar tokens LOCales viejos (recordarme siempre) y usar SESSION
+                    try {
+                        const staleKeys = [];
+                        for (let i = 0; i < localStorage.length; i++) {
+                            const k = localStorage.key(i);
+                            if (k && k.indexOf('firebase:authUser:') === 0) staleKeys.push(k);
+                        }
+                        staleKeys.forEach(k => localStorage.removeItem(k));
+                    } catch (e) {
+                        console.warn('No se pudieron limpiar tokens de sesión locales:', e);
+                    }
+                    try {
+                        auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(err =>
+                            console.warn('No se pudo fijar persistencia SESSION:', err)
+                        );
+                    } catch (e) {
+                        console.warn('Error configurando persistencia SESSION:', e);
+                    }
                 }
             } catch (e) {
                 console.warn('Error inicializando Firebase:', e);
@@ -808,6 +1191,837 @@
         }
 
         let currentViajeId = null;
+
+        /* ============================================================
+           RUTAS GPS HÍBRIDAS (Google Timeline + respaldo automático)
+           ------------------------------------------------------------
+           - La ruta automática se guarda primero en el dispositivo.
+           - Si se importa Timeline.json, Google pasa a ser la fuente principal.
+           - Las dos fuentes se conservan para poder compararlas o cambiar.
+           - La sincronización con Firebase ocurre cuando vuelve internet.
+           ============================================================ */
+
+        const ROUTE_MAX_POINTS = 30000;
+        const ROUTE_DISTANCE_FILTER = 30; // metros: reduce batería y puntos redundantes
+        const ROUTE_MAX_ACCURACY = 250;   // descartar lecturas GPS muy imprecisas
+        let rutaPlugin = null;
+        let rutaPluginModo = null;
+        let rutaPluginInicializado = false;
+        let rutaPluginReady = false;
+        let rutaPluginReadyPromise = Promise.resolve();
+        let rutaWatchId = null;
+        let rutaImportandoPlugin = false;
+
+        function fechaRutaHoy() {
+            const d = new Date();
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
+
+        function fechaRutaDeTimestamp(ts) {
+            const d = new Date(Number(ts));
+            if (!Number.isFinite(d.getTime())) return '';
+            // Usa la zona horaria configurada en el teléfono, que es la que normalmente
+            // corresponde al día que el viajero selecciona en la bitácora.
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
+
+        function rutaLocalKey(user, viajeId, fecha) {
+            return 'travelapp_' + user + '_ruta_' + encodeURIComponent(String(viajeId || '')) + '_' + fecha;
+        }
+
+        function rutaActivaKey(user) {
+            return 'travelapp_' + user + '_ruta_activa';
+        }
+
+        function rutaVacia(viajeId, fecha) {
+            return {
+                version: 1,
+                viajeId: viajeId,
+                fecha: fecha,
+                google: [],
+                automatica: [],
+                fuentePrincipal: null,
+                pendingSync: false,
+                updatedAt: 0
+            };
+        }
+
+        function normalizarRutaRecord(record, viajeId, fecha) {
+            const r = record && typeof record === 'object' ? record : rutaVacia(viajeId, fecha);
+            r.version = r.version || 1;
+            r.viajeId = r.viajeId || viajeId;
+            r.fecha = r.fecha || fecha;
+            r.google = Array.isArray(r.google) ? r.google : [];
+            r.automatica = Array.isArray(r.automatica) ? r.automatica : (Array.isArray(r.auto) ? r.auto : []);
+            r.fuentePrincipal = r.fuentePrincipal === 'google' || r.fuentePrincipal === 'automatica' ? r.fuentePrincipal : null;
+            r.pendingSync = !!r.pendingSync;
+            return r;
+        }
+
+        function getRutaCache(viajeId, fecha, userOverride) {
+            if (!viajeId || !fecha) return rutaVacia(viajeId, fecha);
+            const user = userOverride || getUserRoot();
+            return normalizarRutaRecord(getCache(rutaLocalKey(user, viajeId, fecha)), viajeId, fecha);
+        }
+
+        function setRutaCache(record, userOverride) {
+            if (!record || !record.viajeId || !record.fecha) return;
+            const user = userOverride || getUserRoot();
+            record.updatedAt = Date.now();
+            setCache(rutaLocalKey(user, record.viajeId, record.fecha), record);
+        }
+
+        function rutasLocalesDeUsuario(user) {
+            const pref = 'travelapp_' + user + '_ruta_';
+            const out = [];
+            try {
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    if (!k || k.indexOf(pref) !== 0 || k === rutaActivaKey(user)) continue;
+                    const r = getCache(k);
+                    if (r && r.viajeId && r.fecha) out.push(normalizarRutaRecord(r, r.viajeId, r.fecha));
+                }
+            } catch (e) { console.warn('No se pudieron listar rutas locales:', e); }
+            return out;
+        }
+
+        function rutasPendientesLocales() {
+            return rutasLocalesDeUsuario(getUserRoot()).filter(r => r.pendingSync && (r.google.length || r.automatica.length));
+        }
+
+        function contarRutasPendientes() {
+            try { return rutasPendientesLocales().length; } catch (e) { return 0; }
+        }
+
+        function getRutaActivaContexto() {
+            try { return getCache(rutaActivaKey(getUserRoot())); } catch (e) { return null; }
+        }
+
+        function setRutaActivaContexto(ctx) {
+            if (ctx) setCache(rutaActivaKey(ctx.user || getUserRoot()), ctx);
+            else {
+                try { localStorage.removeItem(rutaActivaKey(getUserRoot())); } catch (e) {}
+            }
+        }
+
+        function distanciaMetros(a, b) {
+            if (!a || !b) return Infinity;
+            const rad = Math.PI / 180;
+            const p1 = Number(a.lat) * rad;
+            const p2 = Number(b.lat) * rad;
+            const dp = (Number(b.lat) - Number(a.lat)) * rad;
+            const dl = (Number(b.lng) - Number(a.lng)) * rad;
+            const h = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+            return 6371000 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(Math.max(0, 1 - h)));
+        }
+
+        function distanciaRutaKm(points) {
+            let total = 0;
+            for (let i = 1; i < points.length; i++) total += distanciaMetros(points[i - 1], points[i]);
+            return total / 1000;
+        }
+
+        function formatearDistanciaRuta(km) {
+            if (!Number.isFinite(km)) return '—';
+            if (km < 1) return Math.round(km * 1000) + ' m';
+            return km.toLocaleString('es-UY', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' km';
+        }
+
+        function horaPuntoRuta(ts) {
+            const d = new Date(Number(ts));
+            return Number.isFinite(d.getTime())
+                ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : '—';
+        }
+
+        function puntosDeFuenteRuta(record, fuente) {
+            if (!record) return [];
+            return fuente === 'google' ? (record.google || []) : (record.automatica || []);
+        }
+
+        function puntosRutaPrincipal(record) {
+            if (!record) return { fuente: null, puntos: [] };
+            const google = puntosDeFuenteRuta(record, 'google');
+            const auto = puntosDeFuenteRuta(record, 'automatica');
+            if (record.fuentePrincipal === 'google' && google.length) return { fuente: 'google', puntos: google };
+            if (record.fuentePrincipal === 'automatica' && auto.length) return { fuente: 'automatica', puntos: auto };
+            if (google.length) return { fuente: 'google', puntos: google };
+            if (auto.length) return { fuente: 'automatica', puntos: auto };
+            return { fuente: null, puntos: [] };
+        }
+
+        function puntoDesdeLocationPlugin(location) {
+            if (!location) return null;
+            const c = location.coords || location.coordinate || location;
+            const lat = Number(c.latitude != null ? c.latitude : c.lat);
+            const lng = Number(c.longitude != null ? c.longitude : (c.lng != null ? c.lng : c.lon));
+            const accuracy = Number(c.accuracy != null ? c.accuracy : location.accuracy);
+            let ts = location.timestamp || location.ts || c.timestamp || c.ts || Date.now();
+            if (typeof ts === 'string') ts = Date.parse(ts);
+            if (typeof ts === 'object' && ts && ts.seconds != null) ts = Number(ts.seconds) * 1000;
+            ts = Number(ts);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+            return {
+                lat: lat,
+                lng: lng,
+                accuracy: Number.isFinite(accuracy) ? accuracy : null,
+                ts: Number.isFinite(ts) ? ts : Date.now(),
+                uuid: location.uuid || location.id || null
+            };
+        }
+
+        function guardarPuntoRutaAutomatica(point, contextOverride) {
+            const ctx = contextOverride || getRutaActivaContexto();
+            if (!ctx || !ctx.viajeId) return false;
+            const p = puntoDesdeLocationPlugin(point);
+            if (!p) return false;
+            if (p.accuracy != null && p.accuracy > ROUTE_MAX_ACCURACY) return false;
+            const fecha = fechaRutaDeTimestamp(p.ts) || ctx.fecha || fechaRutaHoy();
+            const record = getRutaCache(ctx.viajeId, fecha, ctx.user || getUserRoot());
+            const arr = record.automatica;
+
+            if (p.uuid && arr.some(x => x.uuid && x.uuid === p.uuid)) return false;
+            const ultimo = arr[arr.length - 1];
+            if (ultimo && !p.uuid && Math.abs(Number(ultimo.ts) - p.ts) < 10000 && distanciaMetros(ultimo, p) < 5) return false;
+
+            arr.push(p);
+            if (arr.length > ROUTE_MAX_POINTS) arr.splice(0, arr.length - ROUTE_MAX_POINTS);
+            record.pendingSync = true;
+            if (!record.fuentePrincipal) record.fuentePrincipal = 'automatica';
+            setRutaCache(record, ctx.user || getUserRoot());
+
+            const selectedDate = document.getElementById('ruta-fecha') && document.getElementById('ruta-fecha').value;
+            if (ctx.viajeId === currentViajeId && selectedDate === fecha) renderRutaUI(record);
+            return true;
+        }
+
+        function marcarRutaStatus(text, kind) {
+            const el = document.getElementById('ruta-status');
+            if (!el) return;
+            el.textContent = text;
+            el.className = 'text-sm rounded-xl px-4 py-3 mb-4 border ' + (
+                kind === 'ok' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' :
+                kind === 'warn' ? 'bg-amber-50 border-amber-200 text-amber-900' :
+                kind === 'error' ? 'bg-red-50 border-red-200 text-red-800' :
+                'bg-gray-50 border-gray-200 text-gray-700'
+            );
+        }
+
+        function renderRutaCanvas(points) {
+            const canvas = document.getElementById('ruta-canvas');
+            if (!canvas) return;
+            const rect = canvas.getBoundingClientRect();
+            const cssW = Math.max(280, Math.round(rect.width || canvas.parentElement?.clientWidth || 600));
+            const cssH = 280;
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = cssW * dpr;
+            canvas.height = cssH * dpr;
+            canvas.style.width = cssW + 'px';
+            canvas.style.height = cssH + 'px';
+            const ctx = canvas.getContext('2d');
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.clearRect(0, 0, cssW, cssH);
+            ctx.fillStyle = '#f9fafb';
+            ctx.fillRect(0, 0, cssW, cssH);
+
+            ctx.strokeStyle = '#e5e7eb';
+            ctx.lineWidth = 1;
+            for (let x = 0; x <= cssW; x += 50) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, cssH); ctx.stroke(); }
+            for (let y = 0; y <= cssH; y += 50) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(cssW, y); ctx.stroke(); }
+
+            if (!points || points.length === 0) {
+                ctx.fillStyle = '#9ca3af';
+                ctx.font = '14px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('Todavía no hay puntos para este día', cssW / 2, cssH / 2);
+                return;
+            }
+
+            const valid = points.filter(p => Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng)));
+            const minLat = Math.min(...valid.map(p => Number(p.lat)));
+            const maxLat = Math.max(...valid.map(p => Number(p.lat)));
+            const minLng = Math.min(...valid.map(p => Number(p.lng)));
+            const maxLng = Math.max(...valid.map(p => Number(p.lng)));
+            const latSpan = Math.max(maxLat - minLat, 0.00001);
+            const lngSpan = Math.max(maxLng - minLng, 0.00001);
+            const pad = 24;
+            const scale = Math.min((cssW - pad * 2) / lngSpan, (cssH - pad * 2) / latSpan);
+            const offsetX = (cssW - lngSpan * scale) / 2;
+            const offsetY = (cssH - latSpan * scale) / 2;
+            const xy = p => [offsetX + (Number(p.lng) - minLng) * scale, cssH - (offsetY + (Number(p.lat) - minLat) * scale)];
+
+            ctx.strokeStyle = '#7c3aed';
+            ctx.lineWidth = 3;
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            valid.forEach((p, i) => { const [x, y] = xy(p); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+            ctx.stroke();
+
+            const first = xy(valid[0]);
+            const last = xy(valid[valid.length - 1]);
+            ctx.fillStyle = '#059669';
+            ctx.beginPath(); ctx.arc(first[0], first[1], 6, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#dc2626';
+            ctx.beginPath(); ctx.arc(last[0], last[1], 6, 0, Math.PI * 2); ctx.fill();
+            ctx.font = '11px sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillStyle = '#047857'; ctx.fillText('Inicio', first[0] + 8, first[1] - 8);
+            ctx.fillStyle = '#b91c1c'; ctx.fillText('Fin', last[0] + 8, last[1] - 8);
+        }
+
+        function resumenRutaFuente(points, emptyText) {
+            if (!points || !points.length) return emptyText;
+            const km = distanciaRutaKm(points);
+            const inicio = horaPuntoRuta(points[0].ts);
+            const fin = horaPuntoRuta(points[points.length - 1].ts);
+            return points.length + ' puntos · ' + formatearDistanciaRuta(km) + ' · ' + inicio + '–' + fin;
+        }
+
+        function renderRutaUI(record) {
+            if (!record) return;
+            const google = record.google || [];
+            const auto = record.automatica || [];
+            const principal = puntosRutaPrincipal(record);
+            const googleEl = document.getElementById('ruta-google-resumen');
+            const autoEl = document.getElementById('ruta-auto-resumen');
+            const mainEl = document.getElementById('ruta-principal-resumen');
+            const statsEl = document.getElementById('ruta-stats');
+            const btnGoogle = document.getElementById('btn-usar-ruta-google');
+            const btnAuto = document.getElementById('btn-usar-ruta-auto');
+            if (googleEl) googleEl.textContent = resumenRutaFuente(google, 'Sin datos importados');
+            if (autoEl) autoEl.textContent = resumenRutaFuente(auto, 'Sin puntos registrados');
+            if (mainEl) mainEl.textContent = principal.puntos.length
+                ? (principal.fuente === 'google' ? 'Google Maps · ' : 'Automática · ') + resumenRutaFuente(principal.puntos, '')
+                : 'Sin ruta seleccionada';
+            if (statsEl) statsEl.textContent = principal.puntos.length
+                ? (principal.puntos.length + ' puntos · ' + formatearDistanciaRuta(distanciaRutaKm(principal.puntos)))
+                : '';
+            if (btnGoogle) btnGoogle.classList.toggle('hidden', google.length === 0);
+            if (btnAuto) btnAuto.classList.toggle('hidden', auto.length === 0);
+            renderRutaCanvas(principal.puntos);
+
+            const ctx = getRutaActivaContexto();
+            if (ctx && ctx.viajeId === record.viajeId) {
+                marcarRutaStatus('🛰 Seguimiento automático activo. Los puntos se guardan en el dispositivo y se subirán al volver la conexión.', 'ok');
+            } else if (record.pendingSync) {
+                marcarRutaStatus('📴 Ruta guardada localmente. Queda pendiente de sincronización cuando haya internet.', 'warn');
+            } else if (principal.puntos.length) {
+                marcarRutaStatus('Ruta cargada. Fuente principal: ' + (principal.fuente === 'google' ? 'Google Maps' : 'automática') + '.', 'ok');
+            } else {
+                marcarRutaStatus('No hay ruta registrada para este día.', '');
+            }
+        }
+
+        async function cargarRutaDelDia() {
+            const fechaEl = document.getElementById('ruta-fecha');
+            if (!fechaEl || !currentViajeId) return;
+            const fecha = fechaEl.value || fechaRutaHoy();
+            fechaEl.value = fecha;
+            let local = getRutaCache(currentViajeId, fecha);
+
+            // La base online complementa la caché, pero nunca pisa una ruta local
+            // pendiente: el teléfono puede haber trabajado todo el día offline.
+            if (FIREBASE_AVAILABLE && checkIsOnline() && !modoBorrador) {
+                try {
+                    const snap = await withTimeout(db.ref(`${getUserRoot()}/viajes_data/${currentViajeId}/rutas/${fecha}`).once('value'), 7000);
+                    if (snap.exists()) {
+                        const server = normalizarRutaRecord(snap.val(), currentViajeId, fecha);
+                        if (!local.pendingSync) {
+                            local = server;
+                            setRutaCache(local);
+                        } else {
+                            if (!local.google.length && server.google.length) local.google = server.google;
+                            if (!local.automatica.length && server.automatica.length) local.automatica = server.automatica;
+                            if (!local.fuentePrincipal) local.fuentePrincipal = server.fuentePrincipal;
+                        }
+                    }
+                } catch (e) { console.warn('No se pudo descargar la ruta:', e); }
+            }
+            renderRutaUI(local);
+        }
+
+        function elegirFuenteRuta(fuente) {
+            if (!currentViajeId) return toast('Seleccioná un viaje primero');
+            const fecha = document.getElementById('ruta-fecha').value || fechaRutaHoy();
+            const record = getRutaCache(currentViajeId, fecha);
+            const puntos = puntosDeFuenteRuta(record, fuente);
+            if (!puntos.length) return toast('No hay puntos disponibles para esa fuente.');
+            record.fuentePrincipal = fuente;
+            record.pendingSync = true;
+            setRutaCache(record);
+            renderRutaUI(record);
+            toast('Fuente principal: ' + (fuente === 'google' ? 'Google Maps' : 'ruta automática'));
+        }
+
+        function guardarRutaDelDia() {
+            if (!currentViajeId) return toast('Seleccioná un viaje primero');
+            const fecha = document.getElementById('ruta-fecha').value || fechaRutaHoy();
+            const record = getRutaCache(currentViajeId, fecha);
+            const principal = puntosRutaPrincipal(record);
+            if (!principal.puntos.length) return toast('No hay una ruta para guardar.');
+            record.fuentePrincipal = principal.fuente;
+            record.pendingSync = true;
+            setRutaCache(record);
+            renderRutaUI(record);
+            toast('✅ Selección de ruta guardada localmente.');
+            SyncManager.updateUI();
+        }
+
+        async function sincronizarRutasAhora() {
+            if (!FIREBASE_AVAILABLE || !checkIsOnline() || modoBorrador) {
+                toast(modoBorrador ? '🧾 Iniciá sesión para subir las rutas.' : '📴 No hay conexión; las rutas quedan guardadas localmente.');
+                return;
+            }
+            try {
+                const n = await syncRutasLocales();
+                toast(n ? '✅ Rutas sincronizadas: ' + n : 'No hay rutas pendientes.');
+                await cargarRutaDelDia();
+                SyncManager.updateUI();
+            } catch (e) {
+                console.error(e);
+                toast('❌ No se pudieron sincronizar las rutas: ' + (e.message || e));
+            }
+        }
+
+        async function syncRutasLocales() {
+            if (!FIREBASE_AVAILABLE || !db || !checkIsOnline() || modoBorrador || !currentUsername) return 0;
+            const pendientes = rutasPendientesLocales();
+            let ok = 0;
+            for (const record of pendientes) {
+                const payload = deepClone(record);
+                delete payload.pendingSync;
+                try {
+                    await withTimeout(db.ref(`${getUserRoot()}/viajes_data/${record.viajeId}/rutas/${record.fecha}`).set(payload), TIMEOUT_MS);
+                    record.pendingSync = false;
+                    setRutaCache(record);
+                    ok++;
+                } catch (e) {
+                    console.warn('Ruta pendiente no sincronizada', record.viajeId, record.fecha, e);
+                    throw e;
+                }
+            }
+            return ok;
+        }
+
+        async function importarRutasDeUsuario(origenUser, destinoUser) {
+            if (!db) return 0;
+            const rutas = rutasLocalesDeUsuario(origenUser);
+            let ok = 0;
+            for (const record of rutas) {
+                const payload = deepClone(record);
+                delete payload.pendingSync;
+                await db.ref(`${destinoUser}/viajes_data/${record.viajeId}/rutas/${record.fecha}`).set(payload);
+                const copia = normalizarRutaRecord(payload, record.viajeId, record.fecha);
+                copia.pendingSync = false;
+                setRutaCache(copia, destinoUser);
+                ok++;
+            }
+            return ok;
+        }
+
+        function parseTimestampRuta(value) {
+            if (value == null || value === '') return null;
+            if (typeof value === 'object') {
+                if (value.seconds != null) return Number(value.seconds) * 1000 + Math.round(Number(value.nanoseconds || 0) / 1000000);
+                return null;
+            }
+            if (typeof value === 'number' || /^\d+(\.\d+)?$/.test(String(value))) {
+                let n = Number(value);
+                if (n < 100000000000) n *= 1000; // segundos Unix
+                return Number.isFinite(n) ? n : null;
+            }
+            const n = Date.parse(String(value));
+            return Number.isFinite(n) ? n : null;
+        }
+
+        function coordsDesdeTimeline(value) {
+            if (value == null) return null;
+            if (typeof value === 'string') {
+                const s = value.trim().replace(/^geo:/i, '');
+                const m = s.match(/^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+                if (m) return { lat: Number(m[1]), lng: Number(m[2]) };
+                return null;
+            }
+            if (typeof value !== 'object') return null;
+            if (value.latitudeE7 != null && value.longitudeE7 != null) return { lat: Number(value.latitudeE7) / 1e7, lng: Number(value.longitudeE7) / 1e7 };
+            if (value.latE7 != null && value.lngE7 != null) return { lat: Number(value.latE7) / 1e7, lng: Number(value.lngE7) / 1e7 };
+            if (value.latitude != null && value.longitude != null) return { lat: Number(value.latitude), lng: Number(value.longitude) };
+            if (value.lat != null && (value.lng != null || value.lon != null)) return { lat: Number(value.lat), lng: Number(value.lng != null ? value.lng : value.lon) };
+            const nestedKeys = ['point', 'latLng', 'geo', 'location', 'placeLocation', 'startLocation', 'endLocation'];
+            for (const key of nestedKeys) {
+                if (value[key] != null) {
+                    const c = coordsDesdeTimeline(value[key]);
+                    if (c) return c;
+                }
+            }
+            return null;
+        }
+
+        function parseGoogleTimelineJson(data) {
+            const out = [];
+            const seen = new Set();
+            const add = (coords, ts, accuracy) => {
+                if (!coords || !Number.isFinite(coords.lat) || !Number.isFinite(coords.lng) || Math.abs(coords.lat) > 90 || Math.abs(coords.lng) > 180) return;
+                const t = parseTimestampRuta(ts);
+                if (!t) return;
+                const p = { lat: coords.lat, lng: coords.lng, ts: t, accuracy: Number.isFinite(Number(accuracy)) ? Number(accuracy) : null };
+                const key = p.lat.toFixed(6) + '|' + p.lng.toFixed(6) + '|' + p.ts;
+                if (seen.has(key)) return;
+                seen.add(key);
+                out.push(p);
+            };
+
+            const pointTimestamp = (obj, fallback) => {
+                if (!obj || typeof obj !== 'object') return fallback;
+                return obj.timestampMs || obj.timestamp || obj.time || obj.startTimestamp || obj.startTime ||
+                    (obj.duration && (obj.duration.startTimestamp || obj.duration.startTime)) || fallback;
+            };
+
+            const parsePathArray = (arr, fallbackTs) => {
+                if (!Array.isArray(arr)) return;
+                arr.forEach(item => {
+                    if (typeof item === 'string') add(coordsDesdeTimeline(item), fallbackTs, null);
+                    else if (item && typeof item === 'object') add(coordsDesdeTimeline(item), pointTimestamp(item, fallbackTs), item.accuracy || (item.coords && item.coords.accuracy));
+                });
+            };
+
+            const walk = (node, fallbackTs, depth) => {
+                if (!node || depth > 12) return;
+                if (Array.isArray(node)) { node.forEach(x => walk(x, fallbackTs, depth + 1)); return; }
+                if (typeof node !== 'object') return;
+                const ownTs = pointTimestamp(node, fallbackTs);
+                const ownCoords = coordsDesdeTimeline(node);
+                if (ownCoords) add(ownCoords, ownTs, node.accuracy || (node.coords && node.coords.accuracy));
+                ['timelinePath', 'waypointPath', 'path', 'points', 'locations', 'rawLocations'].forEach(key => {
+                    if (Array.isArray(node[key])) parsePathArray(node[key], ownTs);
+                });
+                Object.keys(node).forEach(key => {
+                    if (['settings', 'userLocationProfile', 'placeVisit', 'visit', 'topCandidate'].includes(key)) {
+                        // Los lugares pueden aportar extremos, pero no deben llenar la ruta
+                        // con toda la metadata de Google.
+                        if (key === 'placeVisit' || key === 'visit') walk(node[key], ownTs, depth + 1);
+                        return;
+                    }
+                    const v = node[key];
+                    if (v && typeof v === 'object' && !['timelinePath', 'waypointPath', 'path', 'points', 'locations', 'rawLocations'].includes(key)) walk(v, ownTs, depth + 1);
+                });
+            };
+
+            // Formato clásico Records.json y formatos semánticos mensuales.
+            if (data && Array.isArray(data.locations)) parsePathArray(data.locations, null);
+            if (data && Array.isArray(data.timelineObjects)) data.timelineObjects.forEach(x => walk(x, null, 0));
+            if (data && Array.isArray(data.semanticSegments)) data.semanticSegments.forEach(x => walk(x, null, 0));
+            if (data && Array.isArray(data.timelineSegments)) data.timelineSegments.forEach(x => walk(x, null, 0));
+            // Formato de exportación del teléfono: si no encontramos estructuras
+            // conocidas, se recorre el objeto completo buscando puntos geo: y lat/lng.
+            if (!out.length) walk(data, null, 0);
+
+            out.sort((a, b) => a.ts - b.ts);
+            return out;
+        }
+
+        async function importarArchivoTimeline(file) {
+            if (!file) return;
+            const status = document.getElementById('timeline-import-status');
+            const fecha = document.getElementById('ruta-fecha').value || fechaRutaHoy();
+            if (!currentViajeId) return toast('Seleccioná un viaje antes de importar una ruta.');
+            if (status) { status.classList.remove('hidden'); status.textContent = '⏳ Leyendo exportación de Google Maps…'; }
+            try {
+                const text = await file.text();
+                const data = JSON.parse(text);
+                const todos = parseGoogleTimelineJson(data);
+                const puntos = todos.filter(p => fechaRutaDeTimestamp(p.ts) === fecha);
+                if (!puntos.length) {
+                    if (status) status.textContent = 'No se encontraron puntos para ' + fecha + '. Verificá el día elegido y la zona horaria del teléfono.';
+                    return toast('No hay puntos de Google Maps para ese día.');
+                }
+                const record = getRutaCache(currentViajeId, fecha);
+                record.google = puntos;
+                record.fuentePrincipal = 'google';
+                record.pendingSync = true;
+                record.googleImportadoAt = Date.now();
+                record.googleArchivo = file.name || 'Timeline.json';
+                setRutaCache(record);
+                renderRutaUI(record);
+                if (status) status.textContent = '✅ Importados ' + puntos.length + ' puntos de Google Maps para ' + fecha + '.';
+                toast('✅ Ruta de Google Maps importada.');
+                SyncManager.updateUI();
+            } catch (e) {
+                console.error('Error leyendo Timeline:', e);
+                if (status) status.textContent = '❌ El archivo no parece ser un JSON válido de Google Timeline.';
+                toast('No se pudo leer la exportación de Google Maps.');
+            }
+        }
+
+        function seleccionarArchivoTimeline() {
+            const input = document.getElementById('timeline-file-input');
+            if (!input) return;
+            input.value = '';
+            input.click();
+        }
+
+        function pluginGetLocations() {
+            return new Promise((resolve, reject) => {
+                if (!rutaPlugin || typeof rutaPlugin.getLocations !== 'function') return resolve([]);
+                let settled = false;
+                const ok = v => { if (!settled) { settled = true; resolve(Array.isArray(v) ? v : []); } };
+                const fail = e => { if (!settled) { settled = true; reject(e); } };
+                try {
+                    const r = rutaPlugin.getLocations(ok, fail);
+                    if (r && typeof r.then === 'function') r.then(ok).catch(fail);
+                } catch (e) { fail(e); }
+            });
+        }
+
+        async function importarPuntosPersistidosDelPlugin(contextOverride) {
+            if (rutaImportandoPlugin || !rutaPlugin || typeof rutaPlugin.getLocations !== 'function') return;
+            const ctx = contextOverride || getRutaActivaContexto();
+            if (!ctx || !ctx.viajeId) return;
+            rutaImportandoPlugin = true;
+            try {
+                const locations = await pluginGetLocations();
+                const desde = Number(ctx.startedAt || 0) - 2 * 60 * 60 * 1000;
+                locations.forEach(location => {
+                    const p = puntoDesdeLocationPlugin(location);
+                    if (p && (!desde || p.ts >= desde)) guardarPuntoRutaAutomatica(p, ctx);
+                });
+            } catch (e) { console.warn('No se pudieron recuperar puntos offline del plugin:', e); }
+            finally { rutaImportandoPlugin = false; }
+        }
+
+        function iniciarPluginTransistorsoft() {
+            const bg = rutaPlugin;
+            if (!bg || typeof bg.ready !== 'function' || typeof bg.onLocation !== 'function') return false;
+            try {
+                bg.onLocation(location => guardarPuntoRutaAutomatica(location), error => console.warn('Error de ubicación:', error));
+                if (typeof bg.onProviderChange === 'function') bg.onProviderChange(ev => {
+                    if (ev && ev.enabled === false) marcarRutaStatus('⚠️ La ubicación del dispositivo está desactivada.', 'warn');
+                });
+                const desiredAccuracy = bg.DesiredAccuracy && bg.DesiredAccuracy.High != null
+                    ? bg.DesiredAccuracy.High
+                    : (bg.DESIRED_ACCURACY_HIGH != null ? bg.DESIRED_ACCURACY_HIGH : -1);
+                const persistAll = bg.PersistMode && bg.PersistMode.All != null
+                    ? bg.PersistMode.All
+                    : (bg.PERSIST_MODE_ALL != null ? bg.PERSIST_MODE_ALL : (bg.PERSIST_MODE_LOCATION != null ? bg.PERSIST_MODE_LOCATION : 2));
+                // v5 usa grupos geolocation/app/persistence/http. Las propiedades
+                // planas se dejan también para que la misma página tolere v4.
+                const config = {
+                    geolocation: {
+                        desiredAccuracy: desiredAccuracy,
+                        distanceFilter: ROUTE_DISTANCE_FILTER,
+                        locationUpdateInterval: 60000,
+                        fastestLocationUpdateInterval: 30000,
+                        stopTimeout: 5,
+                        locationAuthorizationRequest: 'Always'
+                    },
+                    app: {
+                        stopOnTerminate: false,
+                        startOnBoot: false,
+                        enableHeadless: true,
+                        backgroundPermissionRationale: {
+                            title: 'Permitir ubicación en segundo plano',
+                            message: 'La Bitácora necesita registrar el recorrido aunque la pantalla esté bloqueada.',
+                            positiveAction: 'Cambiar a "{backgroundPermissionOptionLabel}"',
+                            negativeAction: 'Cancelar'
+                        },
+                        notification: {
+                            title: 'Bitácora de Viaje',
+                            text: 'Registrando recorrido offline',
+                            color: '#d97706'
+                        }
+                    },
+                    persistence: {
+                        maxDaysToPersist: 14,
+                        maxRecordsToPersist: ROUTE_MAX_POINTS,
+                        persistMode: persistAll
+                    },
+                    http: { autoSync: false },
+                    // Compatibilidad con v4 del plugin.
+                    desiredAccuracy: desiredAccuracy,
+                    distanceFilter: ROUTE_DISTANCE_FILTER,
+                    locationUpdateInterval: 60000,
+                    fastestLocationUpdateInterval: 30000,
+                    stopTimeout: 5,
+                    stopOnTerminate: false,
+                    startOnBoot: false,
+                    enableHeadless: true,
+                    foregroundService: true,
+                    notificationTitle: 'Bitácora de Viaje',
+                    notificationText: 'Registrando recorrido offline',
+                    notificationColor: '#d97706',
+                    autoSync: false,
+                    maxDaysToPersist: 14,
+                    persistMode: persistAll
+                };
+                const readyCallback = () => {
+                    rutaPluginReady = true;
+                    importarPuntosPersistidosDelPlugin();
+                };
+                const result = bg.ready(config, readyCallback);
+                if (result && typeof result.then === 'function') {
+                    rutaPluginReadyPromise = result.then(() => { rutaPluginReady = true; importarPuntosPersistidosDelPlugin(); return true; });
+                } else {
+                    rutaPluginReadyPromise = Promise.resolve();
+                }
+                return true;
+            } catch (e) { console.warn('No se pudo inicializar BackgroundGeolocation:', e); return false; }
+        }
+
+        function iniciarPluginBackgroundLegacy() {
+            const bg = rutaPlugin;
+            if (!bg || typeof bg.configure !== 'function') return false;
+            try {
+                const callback = location => guardarPuntoRutaAutomatica(location);
+                const fail = error => console.warn('Error de ubicación en plugin:', error);
+                bg.configure(callback, fail, {
+                    desiredAccuracy: 10,
+                    stationaryRadius: 25,
+                    distanceFilter: ROUTE_DISTANCE_FILTER,
+                    interval: 60000,
+                    fastestInterval: 30000,
+                    stopOnTerminate: false,
+                    startOnBoot: false,
+                    startForeground: true,
+                    notificationTitle: 'Bitácora de Viaje',
+                    notificationText: 'Registrando recorrido offline',
+                    maxLocations: ROUTE_MAX_POINTS
+                });
+                rutaPluginReady = true;
+                return true;
+            } catch (e) { console.warn('No se pudo configurar el plugin de ruta:', e); return false; }
+        }
+
+        function initRutaCordovaPlugin() {
+            if (rutaPluginInicializado) return;
+            const ts = window.BackgroundGeolocation;
+            const legacy = window.backgroundGeolocation || (window.plugins && (window.plugins.backgroundGeolocation || window.plugins.backgroundLocationServices));
+            rutaPlugin = ts || legacy || null;
+            const badge = document.getElementById('ruta-plataforma-badge');
+            if (!rutaPlugin) {
+                if (badge) badge.textContent = (window.cordova ? 'Cordova · plugin pendiente' : 'Web · seguimiento en primer plano');
+                return;
+            }
+            rutaPluginInicializado = true;
+            if (typeof rutaPlugin.ready === 'function' && typeof rutaPlugin.onLocation === 'function') {
+                rutaPluginModo = 'transistorsoft';
+                if (badge) { badge.textContent = 'Cordova · background GPS'; badge.className = 'text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800'; }
+                iniciarPluginTransistorsoft();
+            } else if (typeof rutaPlugin.configure === 'function') {
+                rutaPluginModo = 'legacy';
+                if (badge) { badge.textContent = 'Cordova · background GPS'; badge.className = 'text-xs font-bold px-3 py-1 rounded-full bg-emerald-100 text-emerald-800'; }
+                iniciarPluginBackgroundLegacy();
+            } else {
+                if (badge) badge.textContent = 'Cordova · API GPS no reconocida';
+            }
+        }
+
+        async function iniciarRutaAutomatica() {
+            if (!currentViajeId) return toast('Seleccioná o creá un viaje primero.');
+            const fecha = document.getElementById('ruta-fecha').value || fechaRutaHoy();
+            const ctx = { user: getUserRoot(), viajeId: currentViajeId, fecha: fecha, startedAt: Date.now() };
+            setRutaActivaContexto(ctx);
+            const btn = document.getElementById('btn-ruta-iniciar');
+            try {
+                initRutaCordovaPlugin();
+                if (rutaPlugin && rutaPluginModo === 'transistorsoft' && typeof rutaPlugin.start === 'function') {
+                    await rutaPluginReadyPromise;
+                    const result = rutaPlugin.start();
+                    if (result && typeof result.then === 'function') await result;
+                } else if (rutaPlugin && rutaPluginModo === 'legacy' && typeof rutaPlugin.start === 'function') {
+                    rutaPlugin.start();
+                } else if (navigator.geolocation) {
+                    rutaWatchId = navigator.geolocation.watchPosition(
+                        position => guardarPuntoRutaAutomatica(position),
+                        error => { console.warn('Geolocalización web:', error); marcarRutaStatus('⚠️ No se pudo obtener la ubicación: ' + error.message, 'warn'); },
+                        { enableHighAccuracy: true, maximumAge: 30000, timeout: 30000 }
+                    );
+                } else {
+                    setRutaActivaContexto(null);
+                    return toast('Este dispositivo no dispone de geolocalización.');
+                }
+                if (btn) btn.disabled = true;
+                actualizarControlesRuta();
+                renderRutaUI(getRutaCache(currentViajeId, fecha));
+                toast('🛰 Seguimiento automático iniciado.');
+            } catch (e) {
+                console.error('No se pudo iniciar el seguimiento:', e);
+                setRutaActivaContexto(null);
+                toast('No se pudo iniciar el seguimiento GPS. Revisá los permisos.');
+            }
+        }
+
+        async function detenerRutaAutomatica() {
+            const ctx = getRutaActivaContexto();
+            if (!ctx) return toast('No hay un seguimiento automático activo.');
+            try {
+                await importarPuntosPersistidosDelPlugin(ctx);
+                if (rutaPlugin && rutaPluginModo === 'transistorsoft' && typeof rutaPlugin.stop === 'function') {
+                    const result = rutaPlugin.stop();
+                    if (result && typeof result.then === 'function') await result;
+                } else if (rutaPlugin && rutaPluginModo === 'legacy' && typeof rutaPlugin.stop === 'function') {
+                    rutaPlugin.stop();
+                }
+                if (rutaWatchId !== null && navigator.geolocation) {
+                    navigator.geolocation.clearWatch(rutaWatchId);
+                    rutaWatchId = null;
+                }
+            } catch (e) { console.warn('Error deteniendo seguimiento:', e); }
+            setRutaActivaContexto(null);
+            actualizarControlesRuta();
+            const record = getRutaCache(ctx.viajeId, ctx.fecha, ctx.user || getUserRoot());
+            if (!record.fuentePrincipal && record.automatica.length) record.fuentePrincipal = 'automatica';
+            record.pendingSync = true;
+            setRutaCache(record, ctx.user || getUserRoot());
+            renderRutaUI(record);
+            SyncManager.updateUI();
+            toast('⏹ Seguimiento finalizado. Ruta guardada localmente.');
+        }
+
+        function actualizarControlesRuta() {
+            const ctx = getRutaActivaContexto();
+            const iniciar = document.getElementById('btn-ruta-iniciar');
+            const detener = document.getElementById('btn-ruta-detener');
+            const activaParaViaje = !!(ctx && currentViajeId && ctx.viajeId === currentViajeId);
+            if (iniciar) { iniciar.classList.toggle('hidden', activaParaViaje); iniciar.disabled = false; }
+            if (detener) detener.classList.toggle('hidden', !activaParaViaje);
+        }
+
+        function initRutasUI() {
+            const fechaEl = document.getElementById('ruta-fecha');
+            if (fechaEl && !fechaEl.value) fechaEl.value = fechaRutaHoy();
+            initRutaCordovaPlugin();
+            actualizarControlesRuta();
+            cargarRutaDelDia();
+            importarPuntosPersistidosDelPlugin();
+        }
+
+        document.addEventListener('deviceready', () => {
+            try { window.__APP_INSTALADA = true; } catch (e) {}
+            initRutaCordovaPlugin();
+            importarPuntosPersistidosDelPlugin();
+        }, false);
+        window.addEventListener('resume', () => {
+            initRutaCordovaPlugin();
+            importarPuntosPersistidosDelPlugin();
+            const fechaEl = document.getElementById('ruta-fecha');
+            if (fechaEl && document.getElementById('tab-ruta') && !document.getElementById('tab-ruta').classList.contains('hidden')) cargarRutaDelDia();
+        });
+        window.addEventListener('resize', () => {
+            const fechaEl = document.getElementById('ruta-fecha');
+            if (fechaEl && document.getElementById('tab-ruta') && !document.getElementById('tab-ruta').classList.contains('hidden')) {
+                renderRutaUI(getRutaCache(currentViajeId, fechaEl.value || fechaRutaHoy()));
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const input = document.getElementById('timeline-file-input');
+            if (input) input.addEventListener('change', () => {
+                if (input.files && input.files[0]) importarArchivoTimeline(input.files[0]);
+            });
+            initRutaCordovaPlugin();
+        });
+
 
         const TIMEOUT_MS = 12000; // segundos de espera máxima a Firebase
 
@@ -1001,9 +2215,12 @@
                     }
                 }
 
-                // 2) Intentar escribir en Firebase si hay conexión
+                // 2) Intentar escribir en Firebase si hay conexion.
+                //    En modo borrador NUNCA se escribe al servidor: no hay cuenta a la
+                //    que pertenezcan los datos. Todo queda local hasta que el usuario
+                //    inicie sesion e importe.
                 let wrote = false;
-                if (FIREBASE_AVAILABLE && checkIsOnline()) {
+                if (FIREBASE_AVAILABLE && checkIsOnline() && !modoBorrador) {
                     try {
                         const ref = isGlobal ? db.ref(`${getUserRoot()}/${path}`) : getRef(path);
                         await withTimeout((async () => {
@@ -1035,7 +2252,8 @@
                     };
                     this.queue.push(op);
                     this.saveQueue();
-                    if (checkIsOnline()) toast('⚠️ Sin respuesta del servidor. Guardado localmente (se sincronizará).');
+                    if (modoBorrador) toast('Guardado en este dispositivo (modo borrador) 🧾');
+                    else if (checkIsOnline()) toast('⚠️ Sin respuesta del servidor. Guardado localmente (se sincronizará).');
                     else toast('Guardado localmente (Modo Offline) 📴');
                 } else {
                     this.updateUI();
@@ -1045,12 +2263,18 @@
             },
 
             updateUI() {
+                const pendingRoutes = typeof contarRutasPendientes === 'function' ? contarRutasPendientes() : 0;
+                const pendingTotal = this.queue.length + pendingRoutes;
                 const btn = document.getElementById('btn-sync');
                 const banner = document.getElementById('banner-offline');
                 if (btn) {
-                    if (this.queue.length > 0) {
+                    if (modoBorrador) {
+                        btn.classList.remove('hidden', 'bg-red-600', 'animate-pulse');
+                        btn.classList.add('bg-gray-600');
+                        btn.innerHTML = `<span>🧾 Modo borrador${pendingTotal ? ' (' + pendingTotal + ')' : ''}</span>`;
+                    } else if (pendingTotal > 0) {
                         btn.classList.remove('hidden');
-                        btn.innerHTML = `<span>🔄 Sincronizar (${this.queue.length})</span>`;
+                        btn.innerHTML = `<span>🔄 Sincronizar (${pendingTotal})</span>`;
                         btn.classList.add('bg-red-600', 'animate-pulse');
                         btn.classList.remove('bg-gray-600');
                     } else if (!checkIsOnline() || !FIREBASE_AVAILABLE) {
@@ -1062,11 +2286,22 @@
                         btn.classList.add('hidden');
                     }
                 }
-                if (banner) banner.classList.toggle('hidden', checkIsOnline());
+                if (banner) banner.classList.toggle('hidden', checkIsOnline() || modoBorrador);
+
+                // Banner de modo borrador local
+                const draftBanner = document.getElementById('banner-borrador');
+                if (draftBanner) draftBanner.classList.toggle('hidden', !modoBorrador);
 
                 const btnUpload = document.getElementById('btn-upload');
                 if (btnUpload) {
-                    if (checkIsOnline()) {
+                    if (modoBorrador) {
+                        // En modo borrador no se suben fotos: la cuenta de Cloudinary es
+                        // central y una foto de un borrador descartado quedaria huerfana
+                        // ocupando cuota. Se habilita al iniciar sesion.
+                        btnUpload.disabled = true;
+                        btnUpload.classList.add('opacity-50', 'cursor-not-allowed');
+                        btnUpload.textContent = '📷 Fotos (requiere cuenta)';
+                    } else if (checkIsOnline()) {
                         btnUpload.disabled = false;
                         btnUpload.classList.remove('opacity-50', 'cursor-not-allowed');
                         btnUpload.textContent = '📷 Subir fotos a Cloudinary';
@@ -1079,9 +2314,15 @@
             },
 
             async sync(auto = false) {
+                if (modoBorrador) {
+                    // En modo borrador no hay cuenta destino: no se sincroniza.
+                    if (!auto) toast('🧾 Estás en modo borrador local. Iniciá sesión para guardar en la nube e importar estos datos.');
+                    return;
+                }
                 if (!FIREBASE_AVAILABLE) { if (!auto) toast('Firebase no disponible. Reconectate y recargá la app para sincronizar.'); return; }
                 if (!checkIsOnline()) { if (!auto) toast('No hay conexión a internet.'); return; }
-                if (this.queue.length === 0) { if (!auto) toast('No hay elementos pendientes.'); return; }
+                const rutasPendientes = typeof contarRutasPendientes === 'function' ? contarRutasPendientes() : 0;
+                if (this.queue.length === 0 && rutasPendientes === 0) { if (!auto) toast('No hay elementos pendientes.'); return; }
 
                 if (!auto) toast('Sincronizando...');
                 const btn = document.getElementById('btn-sync');
@@ -1101,6 +2342,7 @@
                     }
                     this.queue = [];
                     this.saveQueue();
+                    if (typeof syncRutasLocales === 'function') await syncRutasLocales();
                     if (!auto) toast('✅ Sincronización completa');
                     await initAdminGlobal();
                 } catch (e) {
@@ -1116,15 +2358,15 @@
                 db.ref('.info/connected').on('value', snap => {
                     isFirebaseConnected = !!snap.val();
                     SyncManager.updateUI();
-                    if (isFirebaseConnected && SyncManager.queue.length > 0) {
+                    if (isFirebaseConnected && (SyncManager.queue.length > 0 || contarRutasPendientes() > 0)) {
                         SyncManager.sync(true);
                     }
                 });
             } catch (e) {}
         }
 
-        window.addEventListener('online', () => { SyncManager.updateUI(); SyncManager.sync(true); });
-        window.addEventListener('offline', () => SyncManager.updateUI());
+        window.addEventListener('online', () => { actualizarAvisoOffline(); SyncManager.updateUI(); SyncManager.sync(true); });
+        window.addEventListener('offline', () => { actualizarAvisoOffline(); SyncManager.updateUI(); });
 
         /* ---------------- Carga inicial / selector de viajes ---------------- */
         async function initAdminGlobal() {
@@ -1290,6 +2532,13 @@
         }
 
         function cambiarViaje(id) {
+            const ctx = typeof getRutaActivaContexto === 'function' ? getRutaActivaContexto() : null;
+            if (ctx && ctx.viajeId && ctx.viajeId !== id) {
+                toast('⏹ Finalizá el seguimiento GPS antes de cambiar de viaje.');
+                const selector = document.getElementById('select-viaje');
+                if (selector) selector.value = currentViajeId || '';
+                return;
+            }
             currentViajeId = id;
             initAdminGlobal();
         }
@@ -1300,13 +2549,14 @@
         let currentEditId = null;
 
         function switchTab(id) {
-            ['tab-nueva','tab-entradas','tab-comentarios','tab-finanzas'].forEach(tab => {
+            ['tab-nueva','tab-entradas','tab-comentarios','tab-ruta','tab-finanzas'].forEach(tab => {
                 document.getElementById(tab).classList.toggle('hidden', tab !== id);
                 document.getElementById('btn-' + tab.split('-')[1]).classList.toggle('active', tab === id);
                 document.getElementById('btn-' + tab.split('-')[1]).classList.toggle('bg-white', tab !== id);
             });
             if (id === 'tab-entradas') cargarEntradas();
             if (id === 'tab-comentarios') cargarComentarios();
+            if (id === 'tab-ruta') initRutasUI();
             if (id === 'tab-finanzas') initFinanzas();
         }
 
@@ -1334,6 +2584,10 @@
             if (!btn || !input) return;
             btn.addEventListener('click', ev => {
                 ev.preventDefault();
+                if (modoBorrador) {
+                    toast('🧾 En modo borrador no se pueden subir fotos. Iniciá sesión para guardarlas en tu cuenta.');
+                    return;
+                }
                 if (subiendoFotos) { toast('Subiendo fotos, esperá…'); return; }
                 input.value = '';
                 input.click();
@@ -2188,11 +3442,31 @@
                     infoBar.classList.remove('flex');
                 }
                 // Oculta la pantalla de carga y muestra el login en el mismo instante.
+                // (Si no hay conexión, el modal muestra un aviso: la primera vez o tras
+                // cerrar sesión, Firebase exige internet.)
                 showAuthModal('credentials');
             }
 
             function decidirSinSesion() {
-                if (!auth.currentUser && !authUser) confirmarSinSesion();
+                if (auth.currentUser || authUser) return;
+                // Si este dispositivo venia en modo borrador, retomar ahi en lugar de
+                // bloquear con el login (permite trabajar sin cuenta ni conexion).
+                if (hayModoBorradorActivo()) { entrarModoBorrador(); return; }
+                confirmarSinSesion();
+            }
+
+            // Entrada directa con la sesión del dispositivo: usa el nombre de usuario
+            // recordado en este dispositivo (entrar sin conexión durante el viaje).
+            function entrarConSesionDeDispositivo() {
+                try {
+                    const cachedUser = (localStorage.getItem('travelapp_active_user') || '').trim();
+                    if (cachedUser && cachedUser !== 'null') {
+                        currentUsername = cachedUser;
+                        onUserAuthenticated(); // revela el panel (modo offline)
+                        return true;
+                    }
+                } catch (e) { /* ignorar */ }
+                return false;
             }
 
             auth.onAuthStateChanged(async user => {
@@ -2200,7 +3474,16 @@
 
                 if (user) {
                     authUser = user;
-                    // Consultar si ya tiene un username asignado en /users/{uid}
+
+                    // Sin internet: no se puede consultar el perfil en Firebase (la
+                    // lectura colgaría esperando la red). Si este dispositivo recuerda
+                    // al usuario, entrar directo en modo offline; si no, avisar.
+                    if (!hayConexion()) {
+                        if (!entrarConSesionDeDispositivo()) confirmarSinSesion();
+                        return;
+                    }
+
+                    // Online: consultar si ya tiene un username asignado en /users/{uid}
                     try {
                         const snap = await db.ref(`users/${user.uid}`).once('value');
                         if (snap.exists() && snap.val().username) {
@@ -2213,30 +3496,27 @@
                         }
                     } catch (e) {
                         console.error('Error al verificar perfil de usuario en Firebase:', e);
-                        // Fallback para modo offline si el usuario ya tenía sesión guardada
-                        const cachedUser = localStorage.getItem('travelapp_active_user');
-                        if (cachedUser) {
-                            currentUsername = cachedUser;
-                            onUserAuthenticated();
-                        } else {
-                            showAuthModal('username');
-                        }
+                        // Fallback offline/caché si el usuario ya tenía sesión guardada
+                        if (!entrarConSesionDeDispositivo()) showAuthModal('username');
                     }
                     return;
                 }
 
                 // Sin sesión por ahora: puede ser un estado transitorio mientras Firebase
-                // restaura una sesión guardada en la pestaña. Mientras tanto la pantalla
+                // restaura una sesión guardada (SESSION/LOCAL). Mientras tanto la pantalla
                 // de carga sigue cubriendo la página; solo pedimos login cuando es seguro
-                // que no hay sesión que restaurar.
+                // que no hay sesión que restaurar. Sin conexión decidimos rápido.
+                const sinRed = !hayConexion();
                 const haySesionPendiente = tieneSesionGuardada();
-                authDecideTimer = setTimeout(decidirSinSesion, haySesionPendiente ? 5000 : 700);
+                authDecideTimer = setTimeout(decidirSinSesion, sinRed ? 300 : (haySesionPendiente ? 5000 : 700));
             });
         } else {
-            // Si Firebase no está disponible, iniciar con usuario local
-            onUserAuthenticated();
+            // Firebase no disponible (p. ej. se abrió el HTML sin subir lib/ ni
+            // firebase-config.js, o se sirvió desde un origen sin esos archivos).
+            // NO inventar una sesión local: eso producía un falso "@null". Avisar.
+            mostrarSinFirebase();
         }
     </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a34e72f27c4c11e8',t:'MTc4ODM3MjM5MA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a388053cbc5b1eba',t:'MTc4ODk3NjA3MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a34e72f27c4c11e8',t:'MTc4ODM3MjM5MA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a38aa65e2e78dd2e',t:'MTc4OTAwMzY0Mg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a38fc1d1be6ac1a0',t:'MTc4OTA1NzE5NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>

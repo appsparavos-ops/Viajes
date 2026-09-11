@@ -8,15 +8,22 @@
    CONFIGURACIÓN Y ESTADO GLOBAL
    ================================================================ */
 const APP_NAME = 'TicketScanner';
+const urlParams = new URLSearchParams(window.location.search);
+let currentUsername = urlParams.get('user') || localStorage.getItem('travelapp_active_user') || 'usuario_anonimo';
+
+function getUserRoot() {
+  return currentUsername || 'usuario_anonimo';
+}
+
 const CACHE_KEYS = {
-  viajes: 'ts_viajes_cache',
-  viajeId: 'ts_viaje_id',
-  syncQueue: 'ts_sync_queue',
-  gastosCache: id => `ts_gastos_${id}`,
+  get viajes() { return `ts_${getUserRoot()}_viajes_cache`; },
+  get viajeId() { return `ts_${getUserRoot()}_viaje_id`; },
+  get syncQueue() { return `ts_${getUserRoot()}_sync_queue`; },
+  gastosCache: id => `ts_${getUserRoot()}_gastos_${id}`,
 };
 
 let db = null;
-let currentViajeId = null;
+let currentViajeId = urlParams.get('id') || null;
 let syncQueue = [];
 let isOnline = navigator.onLine;
 let ocrWorker = null;
@@ -172,7 +179,7 @@ async function cargarViajes() {
 
   if (db && isOnline) {
     try {
-      const snap = await withTimeout(db.ref('viajes_index').once('value'), 6000);
+      const snap = await withTimeout(db.ref(`${getUserRoot()}/viajes_index`).once('value'), 6000);
       if (snap.exists()) {
         snap.forEach(child => viajes.push({ ...child.val(), id: child.key }));
         viajes.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -366,7 +373,7 @@ function guardarConfigViajeros() {
   cache.configuracion.viajeros = lista;
   if (typeof window.setViajeCache === 'function') window.setViajeCache(currentViajeId, cache);
   if (db && currentViajeId) {
-    db.ref(`viajes_data/${currentViajeId}/configuracion/viajeros`).set(lista).catch(() => {});
+    db.ref(`${getUserRoot()}/viajes_data/${currentViajeId}/configuracion/viajeros`).set(lista).catch(() => {});
   }
   actualizarUiViajeros();
   showToast('Viajeros guardados');
@@ -408,7 +415,7 @@ function cargarViajerosDelViaje() {
     const cfg = cache.configuracion || {};
     // Intentar cargar de Firebase
     if (db && isOnline) {
-      db.ref(`viajes_data/${currentViajeId}/configuracion/viajeros`).once('value').then(snap => {
+      db.ref(`${getUserRoot()}/viajes_data/${currentViajeId}/configuracion/viajeros`).once('value').then(snap => {
         if (snap.exists()) {
           viajerosList = snap.val() || [];
           cache.configuracion = cache.configuracion || {};
@@ -441,7 +448,7 @@ function cargarMonedasDelViaje() {
     let mList = cfg.monedas_gasto || ['AR$', 'US$', 'UY$'];
 
     if (db && isOnline) {
-      db.ref(`viajes_data/${currentViajeId}/configuracion/monedas_gasto`).once('value').then(snap => {
+      db.ref(`${getUserRoot()}/viajes_data/${currentViajeId}/configuracion/monedas_gasto`).once('value').then(snap => {
         if (snap.exists()) {
           mList = snap.val() || mList;
           cache.configuracion = cache.configuracion || {};
@@ -780,7 +787,7 @@ async function guardarGasto() {
   let wroteOnline = false;
   if (db && isOnline) {
     try {
-      const refPath = `viajes_data/${currentViajeId}/gastos`;
+      const refPath = `${getUserRoot()}/viajes_data/${currentViajeId}/gastos`;
       await withTimeout(db.ref(refPath).push({
         ...gasto,
         timestamp: firebase.database.ServerValue.TIMESTAMP
@@ -848,7 +855,7 @@ async function cargarGastos() {
   // Fuente 3: Firebase (fuente de verdad si hay conexión)
   if (db && isOnline) {
     try {
-      const snap = await withTimeout(db.ref(`viajes_data/${currentViajeId}/gastos`).once('value'), 6000);
+      const snap = await withTimeout(db.ref(`${getUserRoot()}/viajes_data/${currentViajeId}/gastos`).once('value'), 6000);
       if (snap.exists()) {
         gastosMap.clear(); // Firebase es la fuente de verdad online
         snap.forEach(child => {
@@ -946,10 +953,10 @@ async function syncPending(auto = false) {
     try {
       // Usar la misma estructura de rutas que viaje-admin.html
       let refPath = op.path;
-      if (op.viajeId && !op.path.startsWith('viajes_index')) {
-        refPath = `viajes_data/${op.viajeId}/${op.path}`;
-      } else if (op.viajeId && op.path.includes('viajes_index')) {
-        refPath = op.path;
+      if (op.viajeId && !op.path.startsWith('viajes_data/') && !op.path.startsWith('viajes_index')) {
+        refPath = `${getUserRoot()}/viajes_data/${op.viajeId}/${op.path}`;
+      } else if (!refPath.startsWith(getUserRoot())) {
+        refPath = `${getUserRoot()}/${refPath}`;
       }
 
       const ref = db.ref(refPath);
