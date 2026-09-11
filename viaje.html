@@ -561,9 +561,37 @@
             document.body.style.overflow = '';
         }
 
+        /* Normaliza cualquier representación de fecha a la clave 'YYYY-MM-DD'
+           con la que se guardan las rutas (Google Timeline / automática).
+           El diario puede tenerla como timestamp numérico (ms), cadena numérica
+           o ya como 'YYYY-MM-DD'; se usa el día LOCAL, el mismo criterio con
+           que el panel admin filtró los puntos al importar. */
+        function fechaClaveRuta(fecha) {
+            if (fecha == null || fecha === '') return '';
+            if (typeof fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fecha)) return fecha;
+            const n = (typeof fecha === 'number') ? fecha
+                : (typeof fecha === 'string' && /^\d+$/.test(fecha.trim()) ? Number(fecha.trim()) : null);
+            const d = n != null ? new Date(n < 100000000000 ? n * 1000 : n) : new Date(fecha);
+            if (!Number.isFinite(d.getTime())) return String(fecha);
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
+
+        /* Busca el registro de ruta del día tolerando claves alternativas. */
+        function obtenerRecordRuta(fechaKey) {
+            if (!fechaKey) return null;
+            if (rutasViajeMap[fechaKey]) return rutasViajeMap[fechaKey];
+            const keyReal = Object.keys(rutasViajeMap).find(k => fechaClaveRuta(k) === fechaKey);
+            return keyReal ? rutasViajeMap[keyReal] : null;
+        }
+
         function formatFecha(ts) {
             if (!ts) return '';
-            const d = new Date(ts);
+            // 'YYYY-MM-DD' se interpreta a mediodía local para no mostrar el día
+            // anterior por el cruce de zona horaria (medianoche UTC).
+            const d = (typeof ts === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(ts))
+                ? new Date(ts + 'T12:00:00')
+                : new Date(ts);
+            if (!Number.isFinite(d.getTime())) return '';
             return d.toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
         }
 
@@ -869,12 +897,13 @@
             </button>`;
 
             diasList.forEach(d => {
-                const rec = d.fecha ? rutasViajeMap[d.fecha] : null;
+                const fechaKey = fechaClaveRuta(d.fecha);
+                const rec = fechaKey ? obtenerRecordRuta(fechaKey) : null;
                 const tienePuntos = rec && puntosRutaPrincipal(rec).puntos.length > 0;
-                const isSelected = diaRutaSeleccionado === d.fecha;
+                const isSelected = diaRutaSeleccionado === fechaKey;
 
                 html += `
-                <button type="button" onclick="seleccionarDiaRuta('${d.fecha}')" id="btn-sel-ruta-${d.fecha}" class="dia-ruta-pill px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition flex items-center gap-1.5 ${isSelected ? 'bg-amber-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}">
+                <button type="button" onclick="seleccionarDiaRuta('${fechaKey}')" id="btn-sel-ruta-${fechaKey}" class="dia-ruta-pill px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition flex items-center gap-1.5 ${isSelected ? 'bg-amber-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}">
                     <span class="w-2 h-2 rounded-full ${tienePuntos ? 'bg-emerald-500' : 'bg-gray-300'}" title="${tienePuntos ? 'Ruta sincronizada' : 'Sin ruta registrada'}"></span>
                     <span>Día ${d.numero}: ${d.destino || formatFecha(d.fecha)}</span>
                 </button>`;
@@ -944,6 +973,9 @@
 
         /* ---- Selección de Día y Preparación de Puntos ---- */
         function seleccionarDiaRuta(diaKey) {
+            // El diario guarda la fecha como timestamp numérico y las rutas
+            // como 'YYYY-MM-DD': se normaliza antes de buscar.
+            if (diaKey !== 'todos') diaKey = fechaClaveRuta(diaKey);
             diaRutaSeleccionado = diaKey;
             pausarRuta();
             renderSelectorDiasRuta();
@@ -970,13 +1002,13 @@
                 });
                 puntos.sort((a, b) => (Number(a.ts) || 0) - (Number(b.ts) || 0));
             } else {
-                diaObj = allTripDias.find(d => d.fecha === diaKey);
+                diaObj = allTripDias.find(d => fechaClaveRuta(d.fecha) === diaKey);
                 const diaNum = diaObj ? `Día ${diaObj.numero}: ` : '';
                 const dest = diaObj ? (diaObj.destino || formatFecha(diaKey)) : formatFecha(diaKey);
                 if (titEl) titEl.textContent = diaNum + dest;
                 if (subEl) subEl.textContent = formatFecha(diaKey) + (diaObj && diaObj.recorrido ? ` &bull; ${diaObj.recorrido}` : '');
 
-                const record = rutasViajeMap[diaKey];
+                const record = obtenerRecordRuta(diaKey);
                 const res = puntosRutaPrincipal(record);
                 puntos = res.puntos ? res.puntos.slice() : [];
                 puntos.sort((a, b) => (Number(a.ts) || 0) - (Number(b.ts) || 0));
@@ -1236,5 +1268,5 @@
         initPublicApp();
     </script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a38aa6751ba4dd2e',t:'MTc4OTAwMzY0Ng=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a38aa6751ba4dd2e',t:'MTc4OTAwMzY0Ng=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a397f2522eb245d6',t:'MTc4OTE0MzA2OA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
