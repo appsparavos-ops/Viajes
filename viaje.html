@@ -67,6 +67,13 @@
         .leaflet-container { font-family: 'Lato', sans-serif; background-color: #f3f4f6; }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Marcas horarias bajo la línea de tiempo del reproductor */
+        .marca-hora { position: absolute; top: 2px; display: flex; flex-direction: column; align-items: center; }
+        .marca-hora .marca-linea { display: block; width: 1px; height: 5px; background: #cbd5e1; }
+        .marca-hora .marca-texto { display: block; margin-top: 1px; font-size: 9px; line-height: 1.25; color: #94a3b8; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .marca-hora.marca-dia .marca-linea { width: 2px; height: 8px; background: #d97706; }
+        .marca-hora.marca-dia .marca-texto { color: #b45309; font-weight: 700; }
     </style>
 </head>
 <body class="text-gray-800 antialiased selection:bg-amber-200 selection:text-amber-900">
@@ -203,10 +210,13 @@
 
             <!-- Barra inferior con Controles de Reproducción y Scrubber -->
             <div class="border-t border-gray-200 bg-white/95 backdrop-blur-md p-3 sm:p-4 z-20 flex flex-col gap-2.5">
-                <!-- Línea de tiempo interactiva -->
-                <div class="flex items-center gap-3">
+                <!-- Línea de tiempo interactiva con marcas horarias -->
+                <div class="flex items-start gap-3">
                     <span id="player-hora-actual" class="text-xs font-mono font-bold text-amber-800 min-w-[70px]">--:--</span>
-                    <input type="range" id="player-slider" min="0" max="100" value="0" step="0.1" class="flex-1 accent-amber-600 cursor-pointer h-2 bg-gray-200 rounded-lg" oninput="onPlayerSliderInput(this.value)">
+                    <div class="flex-1 min-w-0">
+                        <input type="range" id="player-slider" min="0" max="100" value="0" step="0.1" class="w-full accent-amber-600 cursor-pointer h-2 bg-gray-200 rounded-lg" oninput="onPlayerSliderInput(this.value)">
+                        <div id="player-ticks" class="relative h-5 pointer-events-none select-none" style="margin: 0 6px;"></div>
+                    </div>
                     <span id="player-hora-fin" class="text-xs font-mono text-gray-500 min-w-[70px] text-right">--:--</span>
                 </div>
 
@@ -1020,6 +1030,7 @@
                 if (emptyOverlay) emptyOverlay.classList.remove('hidden');
                 limpiarCapasMapa();
                 actualizarHUD(0, 0, 0, null, null);
+                renderMarcasHorarias(); // limpia las marcas del día anterior
                 return;
             }
 
@@ -1056,6 +1067,7 @@
             // Reiniciar reproductor al inicio
             currentPointIndex = 0;
             actualizarEstadoReproductor(0);
+            renderMarcasHorarias();
         }
 
         /* ---- Reproductor Dinámico y Animación ---- */
@@ -1220,6 +1232,69 @@
             return Number.isFinite(d.getTime()) ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
         }
 
+        /* ---- Marcas horarias en la línea de tiempo ----
+           El slider avanza por ÍNDICE de punto (no por tiempo), así que cada marca
+           de hora se posiciona en el índice del punto donde esa hora comienza en la
+           grabación: las marcas quedan alineadas con el cursor del reproductor. */
+        function indicePorTimestamp(t) {
+            let lo = 0, hi = puntosActivos.length - 1;
+            while (lo < hi) {
+                const mid = (lo + hi) >> 1;
+                if (Number(puntosActivos[mid].ts) < t) lo = mid + 1; else hi = mid;
+            }
+            return lo;
+        }
+
+        function renderMarcasHorarias() {
+            const cont = document.getElementById('player-ticks');
+            if (!cont) return;
+            cont.innerHTML = '';
+            if (puntosActivos.length < 2) return;
+
+            // Extremos con timestamp válido (los puntos vienen ordenados por ts)
+            const tsValidos = puntosActivos.map(p => Number(p.ts)).filter(t => Number.isFinite(t) && t > 0);
+            if (tsValidos.length < 2) return;
+            const t0 = tsValidos[0];
+            const t1 = tsValidos[tsValidos.length - 1];
+            const spanMs = t1 - t0;
+            if (spanMs < 30 * 60000) return; // recorridos de menos de 30 min: sin marcas
+
+            // Paso adaptativo según la duración del recorrido
+            const spanH = spanMs / 3600000;
+            let pasoH = 1;
+            if (spanH > 96) pasoH = 24;
+            else if (spanH > 48) pasoH = 12;
+            else if (spanH > 24) pasoH = 6;
+            else if (spanH > 12) pasoH = 3;
+            else if (spanH > 6) pasoH = 2;
+
+            // Primera marca: la próxima hora en punto (local) posterior al inicio
+            const cursor = new Date(t0);
+            cursor.setMinutes(0, 0, 0);
+            if (cursor.getTime() <= t0) cursor.setHours(cursor.getHours() + 1);
+            while (cursor.getHours() % pasoH !== 0) cursor.setHours(cursor.getHours() + 1);
+
+            const total = puntosActivos.length - 1;
+            const partes = [];
+            while (cursor.getTime() < t1) {
+                const esMedianoche = cursor.getHours() === 0;
+                const pct = (indicePorTimestamp(cursor.getTime()) / total) * 100;
+                const etiqueta = esMedianoche
+                    ? cursor.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
+                    : String(cursor.getHours()).padStart(2, '0') + ':00';
+                const ancla = pct < 5 ? 'transform:translateX(0)'
+                    : (pct > 95 ? 'transform:translateX(-100%)' : 'transform:translateX(-50%)');
+                partes.push(
+                    `<div class="marca-hora ${esMedianoche ? 'marca-dia' : ''}" style="left:${pct}%;${ancla}">` +
+                    `<span class="marca-linea"></span>` +
+                    `<span class="marca-texto">${etiqueta}</span>` +
+                    `</div>`
+                );
+                cursor.setHours(cursor.getHours() + pasoH);
+            }
+            cont.innerHTML = partes.join('');
+        }
+
         function actualizarHUD(distRecorrida, distTotal, numPuntos, currentTs, percent) {
             const hudDist = document.getElementById('hud-distancia');
             const hudPts = document.getElementById('hud-puntos');
@@ -1268,5 +1343,6 @@
         initPublicApp();
     </script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a38aa6751ba4dd2e',t:'MTc4OTAwMzY0Ng=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a397f2522eb245d6',t:'MTc4OTE0MzA2OA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a38aa6751ba4dd2e',t:'MTc4OTAwMzY0Ng=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3985f9b68dec80f',t:'MTc4OTE0NzU0NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
