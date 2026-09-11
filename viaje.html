@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bitácora de Viaje</title>
     <script src="lib/tailwindcss.js"></script>
+    <link rel="stylesheet" href="lib/leaflet.css">
+    <script src="lib/leaflet.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <!-- Playfair Display para los títulos estilo revista, Lato para el texto base -->
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,400;1,600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
@@ -33,9 +35,46 @@
         .editorial-text p {
             margin-bottom: 1.5rem;
         }
+
+        /* Estilos de la Pestaña Ruta y Reproductor Dinámico */
+        .speed-btn.active { background-color: #d97706; color: white; }
+        .tab-btn-main.active { background-color: #d97706; color: white; border-color: #d97706; }
+        .pulsing-marker {
+            width: 22px;
+            height: 22px;
+            background: #d97706;
+            border: 3px solid #ffffff;
+            border-radius: 50%;
+            box-shadow: 0 0 12px rgba(217, 119, 6, 0.9);
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .pulsing-marker::after {
+            content: '';
+            position: absolute;
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: rgba(217, 119, 6, 0.45);
+            animation: pulse-ring 1.6s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.4); opacity: 1; }
+            100% { transform: scale(1.6); opacity: 0; }
+        }
+        .leaflet-container { font-family: 'Lato', sans-serif; background-color: #f3f4f6; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
 <body class="text-gray-800 antialiased selection:bg-amber-200 selection:text-amber-900">
+
+    <!-- Aviso: bitacora en modo borrador local (sin cuenta, datos solo en este dispositivo) -->
+    <div id="aviso-borrador" class="hidden bg-amber-100 border-b border-amber-300 text-amber-900 text-sm px-4 py-2 text-center">
+        🧾 <strong>Borrador local</strong> — esta bitácora todavía no está publicada: los datos están solo en este dispositivo.
+    </div>
 
     <!-- Masthead / Título de la Revista -->
     <header class="bg-white py-16 px-4 border-b border-gray-200 shadow-sm relative overflow-hidden">
@@ -63,13 +102,30 @@
         </div>
     </header>
 
-    <!-- Navegación pegajosa (Índice) -->
-    <nav class="bg-white/90 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50 transition-all shadow-sm">
-        <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-            <div class="overflow-x-auto flex flex-1 gap-6 items-center font-serif text-sm italic text-gray-500 whitespace-nowrap hide-scrollbar" id="nav-dias">
+    <!-- Navegación pegajosa (Índice y Pestañas) -->
+    <nav class="bg-white/95 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50 transition-all shadow-sm">
+        <div class="max-w-6xl mx-auto px-4 py-2.5 flex items-center justify-between gap-3">
+            <!-- Pestañas de Vista -->
+            <div class="flex items-center gap-1.5 shrink-0">
+                <button id="tab-btn-diario" type="button" onclick="cambiarVistaPrincipal('diario')" class="tab-btn-main active px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider rounded-xl border border-transparent shadow-sm transition">
+                    📖 Diario
+                </button>
+                <button id="tab-btn-ruta" type="button" onclick="cambiarVistaPrincipal('ruta')" class="tab-btn-main px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider rounded-xl bg-gray-100 text-gray-700 hover:bg-amber-50 hover:text-amber-800 border border-gray-200 transition flex items-center gap-1.5">
+                    <span>🗺️ Ruta</span>
+                    <span id="badge-ruta-disponible" class="hidden w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Rutas GPS sincronizadas"></span>
+                </button>
+            </div>
+
+            <!-- Separador vertical -->
+            <div class="h-5 w-[1px] bg-gray-200 hidden sm:block"></div>
+
+            <!-- Índice de días para el diario -->
+            <div class="overflow-x-auto flex flex-1 gap-5 items-center font-serif text-sm italic text-gray-500 whitespace-nowrap hide-scrollbar" id="nav-dias">
                 Cargando el índice...
             </div>
-            <button onclick="abrirGaleriaTotal()" class="ml-4 pl-4 border-l border-gray-300 text-xs font-bold text-gray-900 uppercase tracking-widest hover:text-amber-700 whitespace-nowrap flex items-center gap-1">
+
+            <!-- Botón Galería -->
+            <button onclick="abrirGaleriaTotal()" class="ml-2 pl-3 border-l border-gray-300 text-xs font-bold text-gray-900 uppercase tracking-widest hover:text-amber-700 whitespace-nowrap flex items-center gap-1 shrink-0">
                 <span>📷 Galería</span>
             </button>
         </div>
@@ -89,10 +145,97 @@
         </div>
     </div>
 
-    <!-- Contenedor Principal -->
+    <!-- Contenedor Principal (Diario de Viaje) -->
     <main class="w-full py-12" id="main-content">
         <div class="flex justify-center py-20"><div class="spinner"></div></div>
     </main>
+
+    <!-- Contenedor Pestaña Ruta (Mapa Interactivo y Trazado Dinámico) -->
+    <section id="ruta-content" class="w-full py-8 max-w-6xl mx-auto px-4 hidden">
+        <!-- Encabezado y Selector de Día -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 md:p-6 mb-6">
+            <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-gray-100 pb-4 mb-4">
+                <div>
+                    <span class="text-amber-700 text-xs font-bold uppercase tracking-[0.3em] block mb-1">🛰️ Itinerario y Recorrido Satelital</span>
+                    <h2 id="ruta-dia-titulo" class="text-2xl md:text-3xl font-serif font-black text-gray-900">Todo el viaje</h2>
+                    <p id="ruta-dia-subtitulo" class="text-sm font-serif italic text-gray-500 mt-1">Sincronizando ruta desde Firebase...</p>
+                </div>
+                
+                <!-- HUD de Estadísticas Rápidas -->
+                <div class="flex items-center gap-2.5 flex-wrap">
+                    <div class="bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-2 text-center min-w-[85px]">
+                        <span class="text-[10px] uppercase font-bold text-amber-800 tracking-wider block">Distancia</span>
+                        <span id="hud-distancia" class="text-base sm:text-lg font-black text-amber-900 leading-tight">0 km</span>
+                    </div>
+                    <div class="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2 text-center min-w-[85px]">
+                        <span class="text-[10px] uppercase font-bold text-gray-600 tracking-wider block">Puntos GPS</span>
+                        <span id="hud-puntos" class="text-base sm:text-lg font-black text-gray-800 leading-tight">0</span>
+                    </div>
+                    <div class="bg-emerald-50 border border-emerald-200 rounded-xl px-3.5 py-2 text-center min-w-[85px]">
+                        <span class="text-[10px] uppercase font-bold text-emerald-800 tracking-wider block">Avance</span>
+                        <span id="hud-progreso" class="text-base sm:text-lg font-black text-emerald-800 leading-tight">0%</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Selector horizontal de días con indicador de ruta -->
+            <div class="flex items-center gap-2 overflow-x-auto pb-2 hide-scrollbar" id="ruta-selector-dias">
+                <!-- Se inyecta dinámicamente -->
+            </div>
+        </div>
+
+        <!-- Mapa y Reproductor Dinámico -->
+        <div class="relative bg-white rounded-2xl shadow-md border border-gray-200 overflow-hidden">
+            <!-- Mapa Leaflet -->
+            <div id="mapa-recorrido" class="w-full h-[450px] md:h-[580px] z-10"></div>
+
+            <!-- Overlay cuando el día no tiene puntos registrados -->
+            <div id="ruta-vacio-overlay" class="absolute inset-0 bg-white/95 z-20 hidden flex flex-col items-center justify-center p-6 text-center">
+                <div class="w-16 h-16 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center text-3xl mb-3 shadow-inner">🗺️</div>
+                <h3 class="text-xl font-serif font-bold text-gray-800 mb-1">Sin ruta GPS registrada para este día</h3>
+                <p class="text-sm font-serif italic text-gray-500 max-w-md mb-6 leading-relaxed">
+                    Aún no se ha sincronizado una ruta GPS para esta fecha. Podés iniciar el seguimiento automático o importar tu historial de Google Maps desde el panel de administración.
+                </p>
+                <button type="button" onclick="seleccionarDiaRuta('todos')" class="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold uppercase tracking-wider rounded-xl transition shadow-sm">
+                    Ver recorrido completo del viaje &rarr;
+                </button>
+            </div>
+
+            <!-- Barra inferior con Controles de Reproducción y Scrubber -->
+            <div class="border-t border-gray-200 bg-white/95 backdrop-blur-md p-3 sm:p-4 z-20 flex flex-col gap-2.5">
+                <!-- Línea de tiempo interactiva -->
+                <div class="flex items-center gap-3">
+                    <span id="player-hora-actual" class="text-xs font-mono font-bold text-amber-800 min-w-[70px]">--:--</span>
+                    <input type="range" id="player-slider" min="0" max="100" value="0" step="0.1" class="flex-1 accent-amber-600 cursor-pointer h-2 bg-gray-200 rounded-lg" oninput="onPlayerSliderInput(this.value)">
+                    <span id="player-hora-fin" class="text-xs font-mono text-gray-500 min-w-[70px] text-right">--:--</span>
+                </div>
+
+                <!-- Botones y Velocidades -->
+                <div class="flex items-center justify-between flex-wrap gap-2 pt-1">
+                    <div class="flex items-center gap-2">
+                        <button id="btn-play-pause" type="button" onclick="togglePlayRuta()" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-sm">
+                            <span id="btn-play-icon">▶</span>
+                            <span id="btn-play-text">Iniciar recorrido</span>
+                        </button>
+                        <button type="button" onclick="reiniciarRuta()" class="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition flex items-center gap-1">
+                            <span>🔄</span> <span class="hidden sm:inline">Reiniciar</span>
+                        </button>
+                        <button type="button" id="btn-toggle-follow" onclick="toggleAutoFollow()" class="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/80 rounded-xl text-xs font-bold transition flex items-center gap-1" title="Seguir al viajero con la cámara del mapa">
+                            <span>🎯</span> <span class="hidden sm:inline">Seguir viajero</span>
+                        </button>
+                    </div>
+
+                    <div class="flex items-center gap-1 bg-gray-100 p-1 rounded-xl text-xs font-bold">
+                        <span class="text-gray-400 text-[10px] px-1 uppercase tracking-wider hidden sm:inline">Velocidad:</span>
+                        <button type="button" onclick="setVelocidadRuta(1)" class="speed-btn active px-2.5 py-1 rounded-lg transition" id="speed-1">1x</button>
+                        <button type="button" onclick="setVelocidadRuta(3)" class="speed-btn px-2.5 py-1 rounded-lg transition" id="speed-3">3x</button>
+                        <button type="button" onclick="setVelocidadRuta(6)" class="speed-btn px-2.5 py-1 rounded-lg transition" id="speed-6">6x</button>
+                        <button type="button" onclick="setVelocidadRuta(12)" class="speed-btn px-2.5 py-1 rounded-lg transition" id="speed-12">12x</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
 
     <!-- Footer estilo editorial -->
     <footer class="bg-gray-900 text-gray-400 py-12 text-center text-sm">
@@ -121,6 +264,30 @@
 
         let currentUsername = null;
         let currentViajeId = null;
+
+        /* ---- Modo borrador local ----
+           Cuando la bitacora se creo sin cuenta (panel admin en modo borrador), los
+           datos viven SOLO en este dispositivo. En ese caso la pagina publica no debe
+           consultar Firebase: lee la misma cache local que usa el panel admin. */
+        const DRAFT_USER = '_borrador_local';
+
+        function leerCacheLocal(clave) {
+            try { const v = localStorage.getItem(clave); return v ? JSON.parse(v) : null; }
+            catch (e) { return null; }
+        }
+
+        function esBorradorLocal() {
+            if (currentUsername === DRAFT_USER) return true;
+            try {
+                const u = new URLSearchParams(window.location.search).get('user');
+                return u === DRAFT_USER;
+            } catch (e) { return false; }
+        }
+
+        function mostrarAvisoBorrador() {
+            const aviso = document.getElementById('aviso-borrador');
+            if (aviso) aviso.classList.remove('hidden');
+        }
         
         function getRef(path) {
             return db.ref(`${currentUsername}/viajes_data/${currentViajeId}/${path}`);
@@ -145,6 +312,21 @@
             const urlParams = new URLSearchParams(window.location.search);
             const urlUser = urlParams.get('user');
             const urlId = urlParams.get('id');
+
+            // Modo borrador: datos locales, sin cuenta ni Firebase.
+            if (urlUser === DRAFT_USER || urlParams.get('borrador') === '1') {
+                currentUsername = DRAFT_USER;
+                mostrarAvisoBorrador();
+                // No hay lista de viajeros que elegir: se oculta ese selector.
+                const selUsuario = document.getElementById('select-usuario-publico');
+                if (selUsuario) {
+                    const wrapper = selUsuario.closest('div');
+                    if (wrapper) wrapper.classList.add('hidden');
+                }
+                document.getElementById('selector-viajes-container').classList.remove('hidden');
+                await cargarViajesUsuario(DRAFT_USER, urlId);
+                return;
+            }
 
             // 1) Leer usuarios registrados de Firebase (/usernames)
             let usuarios = [];
@@ -200,18 +382,37 @@
             currentUsername = username;
             const tripSelector = document.getElementById('select-viaje-publico');
 
+            const esBorrador = (username === DRAFT_USER);
+
             try {
-                const snap = await db.ref(`${currentUsername}/viajes_index`).once('value');
-                if (!snap.exists()) {
+                let viajes = [];
+                if (esBorrador) {
+                    viajes = leerCacheLocal('travelapp_' + DRAFT_USER + '_viajes_cache') || [];
+                    if (!Array.isArray(viajes)) viajes = [];
+                } else {
+                    const snap = await db.ref(`${currentUsername}/viajes_index`).once('value');
+                    if (!snap.exists()) {
+                        tripSelector.innerHTML = '<option value="">(Sin viajes registrados)</option>';
+                        document.getElementById('subtitulo').textContent = `Viajes de @${currentUsername}`;
+                        document.getElementById('nav-dias').innerHTML = '';
+                        document.getElementById('main-content').innerHTML = `<p class="text-center text-gray-400 italic py-16 font-serif text-lg">@${currentUsername} aún no tiene viajes publicados.</p>`;
+                        return;
+                    }
+                    snap.forEach(c => { viajes.push({ ...c.val(), id: c.key }); });
+                }
+
+                if (viajes.length === 0) {
                     tripSelector.innerHTML = '<option value="">(Sin viajes registrados)</option>';
-                    document.getElementById('subtitulo').textContent = `Viajes de @${currentUsername}`;
+                    document.getElementById('subtitulo').textContent = esBorrador
+                        ? 'Borrador local (solo este dispositivo)'
+                        : `Viajes de @${currentUsername}`;
                     document.getElementById('nav-dias').innerHTML = '';
-                    document.getElementById('main-content').innerHTML = `<p class="text-center text-gray-400 italic py-16 font-serif text-lg">@${currentUsername} aún no tiene viajes publicados.</p>`;
+                    document.getElementById('main-content').innerHTML = esBorrador
+                        ? '<p class="text-center text-gray-400 italic py-16 font-serif text-lg">Todavía no hay viajes guardados en este dispositivo.<br><span class="text-base">Creá uno desde el panel de administración.</span></p>'
+                        : `<p class="text-center text-gray-400 italic py-16 font-serif text-lg">@${currentUsername} aún no tiene viajes publicados.</p>`;
                     return;
                 }
 
-                let viajes = [];
-                snap.forEach(c => { viajes.push({ ...c.val(), id: c.key }); });
                 viajes.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
                 if (preferredTripId && viajes.find(v => v.id === preferredTripId)) {
@@ -226,6 +427,7 @@
                 ).join('');
 
                 cargarDias();
+                cargarRutasViaje();
             } catch (err) {
                 console.error('Error al cargar viajes del usuario:', err);
                 document.getElementById('main-content').innerHTML = '<p class="text-center text-red-500 py-16 font-serif text-lg">Error al conectar con Firebase.</p>';
@@ -278,9 +480,18 @@
         let allTripDias = [];
 
         async function cargarDias() {
-            const snap = await getRef('dias').orderByChild('numero').once('value');
             const dias = [];
-            snap.forEach(child => { dias.push({ ...child.val(), id: child.key }); });
+            const esBorrador = esBorradorLocal();
+            if (esBorrador) {
+                // Datos locales: misma cache que escribe el panel admin.
+                const cache = leerCacheLocal('travelapp_' + DRAFT_USER + '_viajedata_' + (currentViajeId || '')) || {};
+                const arr = Array.isArray(cache.dias) ? cache.dias.slice() : [];
+                arr.sort((a, b) => (a.numero || 0) - (b.numero || 0));
+                arr.forEach(d => dias.push(d));
+            } else {
+                const snap = await getRef('dias').orderByChild('numero').once('value');
+                snap.forEach(child => { dias.push({ ...child.val(), id: child.key }); });
+            }
             allTripDias = dias;
 
             if (dias.length > 0) {
@@ -300,6 +511,8 @@
             const separator = `<div class="w-12 h-[1px] bg-gray-400 mx-auto my-24"></div>`;
             main.innerHTML = dias.map((d, index) => renderDia(d, index)).join(separator);
             
+            // En modo borrador, cargarComentarios no consulta Firebase: solo informa
+            // que el libro de visitas se habilita al publicar, y oculta el formulario.
             dias.forEach(d => cargarComentarios(d.id));
             
             // Build allTripPhotos
@@ -402,7 +615,6 @@
             const isEven = index % 2 === 0;
             const imgOrder = isEven ? 'md:order-1' : 'md:order-2';
             const textOrder = isEven ? 'md:order-2' : 'md:order-1';
-            const textAlign = isEven ? 'md:text-left' : 'md:text-left'; // Podríamos alinear a la derecha, pero la lectura es mejor a la izquierda.
 
             const title = d.titulo || d.destino;
 
@@ -413,9 +625,14 @@
                 <header class="text-center mb-12 max-w-3xl mx-auto">
                     <p class="text-amber-700 font-bold uppercase tracking-[0.3em] text-xs mb-4">Día ${d.numero} &mdash; ${d.destino}</p>
                     <h2 class="text-5xl md:text-6xl font-serif font-black text-gray-900 leading-tight tracking-tight mb-6">${title}</h2>
-                    <div class="flex items-center justify-center gap-4 text-gray-500 italic font-serif text-lg">
+                    <div class="flex items-center justify-center gap-4 text-gray-500 italic font-serif text-lg flex-wrap">
                         <span>${formatFecha(d.fecha)}</span>
                         ${d.recorrido ? `<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> <span>${d.recorrido}</span>` : ''}
+                    </div>
+                    <div class="mt-3 flex justify-center">
+                        <button type="button" onclick="irARutaDia('${d.fecha || ''}')" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-sans font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 transition shadow-sm">
+                            <span>🛰️ Ver recorrido en el mapa</span> <span>&rarr;</span>
+                        </button>
                     </div>
                 </header>
 
@@ -443,7 +660,7 @@
                                 <p class="text-gray-400 text-sm italic font-serif">Cargando notas...</p>
                             </div>
                             
-                            <form onsubmit="enviarComentario(event, '${d.id}')" class="bg-white p-6 border border-gray-100 shadow-sm rounded-lg">
+                            <form id="form-comentario-${d.id}" onsubmit="enviarComentario(event, '${d.id}')" class="bg-white p-6 border border-gray-100 shadow-sm rounded-lg">
                                 <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Dejá tu firma</p>
                                 <input type="text" placeholder="Tu nombre" required maxlength="60" class="w-full bg-transparent border-b border-gray-300 py-2 text-sm focus:outline-none focus:border-amber-600 mb-4 transition-colors font-serif italic" id="nombre-${d.id}">
                                 <textarea placeholder="Escribí un mensaje..." required maxlength="800" rows="1" class="w-full bg-transparent border-b border-gray-300 py-2 text-sm focus:outline-none focus:border-amber-600 transition-colors font-serif resize-y mb-6" id="texto-${d.id}"></textarea>
@@ -458,8 +675,18 @@
         }
 
         async function cargarComentarios(diaId) {
-            const snap = await getRef('comentarios').orderByChild('diaId').equalTo(diaId).once('value');
             const contenedor = document.getElementById(`comentarios-${diaId}`);
+
+            // En modo borrador no hay nodo en Firebase donde guardar mensajes:
+            // se explica en lugar de fallar.
+            if (esBorradorLocal()) {
+                if (contenedor) contenedor.innerHTML = '<p class="text-gray-400 text-sm italic font-serif">El libro de visitas se habilita cuando la bitácora se publica con una cuenta.</p>';
+                const forma = document.getElementById(`form-comentario-${diaId}`);
+                if (forma) forma.classList.add('hidden');
+                return;
+            }
+
+            const snap = await getRef('comentarios').orderByChild('diaId').equalTo(diaId).once('value');
             
             const comentarios = [];
             snap.forEach(c => {
@@ -482,6 +709,7 @@
 
         async function enviarComentario(e, diaId) {
             e.preventDefault();
+            if (esBorradorLocal()) return;
             const autor = document.getElementById(`nombre-${diaId}`).value.trim();
             const texto = document.getElementById(`texto-${diaId}`).value.trim();
             const msg = document.getElementById(`msg-${diaId}`);
@@ -501,7 +729,512 @@
             }
         }
 
+        
+        /* ==========================================================================
+           MÓDULO DE RUTA GPS Y REPRODUCTOR DINÁMICO (Leaflet)
+           ========================================================================== */
+        let vistaActual = 'diario';
+        let mapaRecorrido = null;
+        let layerFullTrack = null;
+        let layerTraveledTrack = null;
+        let markerViajero = null;
+        let markerInicio = null;
+        let markerFin = null;
+
+        let rutasViajeMap = {}; // Diccionario: { 'YYYY-MM-DD': record }
+        let diaRutaSeleccionado = 'todos'; // 'todos' o 'YYYY-MM-DD'
+        let puntosActivos = []; // Puntos del día o viaje actual
+
+        // Estado del Reproductor Dinámico
+        let isPlaying = false;
+        let animFrameId = null;
+        let currentPointIndex = 0; // Puede ser decimal para interpolación fluida
+        let velocidadReproduccion = 1; // 1x, 3x, 6x, 12x
+        let autoFollow = true;
+        let lastFrameTimestamp = 0;
+
+        function cambiarVistaPrincipal(vista) {
+            vistaActual = vista;
+            const mainDiario = document.getElementById('main-content');
+            const secRuta = document.getElementById('ruta-content');
+            const btnDiario = document.getElementById('tab-btn-diario');
+            const btnRuta = document.getElementById('tab-btn-ruta');
+            const navDias = document.getElementById('nav-dias');
+
+            if (vista === 'ruta') {
+                if (mainDiario) mainDiario.classList.add('hidden');
+                if (secRuta) secRuta.classList.remove('hidden');
+                if (navDias) navDias.classList.add('opacity-40', 'pointer-events-none');
+                
+                if (btnDiario) {
+                    btnDiario.className = 'tab-btn-main px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider rounded-xl bg-gray-100 text-gray-700 hover:bg-amber-50 hover:text-amber-800 border border-gray-200 transition';
+                }
+                if (btnRuta) {
+                    btnRuta.className = 'tab-btn-main active px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider rounded-xl border border-transparent shadow-sm transition flex items-center gap-1.5';
+                }
+
+                initMapaRecorrido();
+                setTimeout(() => {
+                    if (mapaRecorrido) mapaRecorrido.invalidateSize();
+                }, 150);
+            } else {
+                if (secRuta) secRuta.classList.add('hidden');
+                if (mainDiario) mainDiario.classList.remove('hidden');
+                if (navDias) navDias.classList.remove('opacity-40', 'pointer-events-none');
+
+                if (btnRuta) {
+                    btnRuta.className = 'tab-btn-main px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider rounded-xl bg-gray-100 text-gray-700 hover:bg-amber-50 hover:text-amber-800 border border-gray-200 transition flex items-center gap-1.5';
+                }
+                if (btnDiario) {
+                    btnDiario.className = 'tab-btn-main active px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider rounded-xl border border-transparent shadow-sm transition';
+                }
+                pausarRuta();
+            }
+        }
+
+        function irARutaDia(fecha) {
+            cambiarVistaPrincipal('ruta');
+            if (fecha) {
+                seleccionarDiaRuta(fecha);
+            }
+            const sec = document.getElementById('ruta-content');
+            if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        /* ---- Carga de Rutas desde Firebase / Local ---- */
+        function puntosRutaPrincipal(record) {
+            if (!record) return { fuente: null, puntos: [] };
+            const google = Array.isArray(record.google) ? record.google : [];
+            const auto = Array.isArray(record.automatica) ? record.automatica : [];
+            if (record.fuentePrincipal === 'google' && google.length) return { fuente: 'google', puntos: google };
+            if (record.fuentePrincipal === 'automatica' && auto.length) return { fuente: 'automatica', puntos: auto };
+            if (google.length) return { fuente: 'google', puntos: google };
+            if (auto.length) return { fuente: 'automatica', puntos: auto };
+            return { fuente: null, puntos: [] };
+        }
+
+        async function cargarRutasViaje() {
+            rutasViajeMap = {};
+            if (!currentUsername || !currentViajeId) return;
+
+            if (esBorradorLocal()) {
+                // Recuperar rutas de caché local
+                try {
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const k = localStorage.key(i);
+                        if (k && k.includes(currentViajeId) && k.includes('ruta')) {
+                            const data = leerCacheLocal(k);
+                            if (data && data.fecha) rutasViajeMap[data.fecha] = data;
+                        }
+                    }
+                } catch (e) {}
+            } else {
+                try {
+                    const snap = await db.ref(`${currentUsername}/viajes_data/${currentViajeId}/rutas`).once('value');
+                    if (snap.exists()) {
+                        snap.forEach(child => {
+                            rutasViajeMap[child.key] = child.val();
+                        });
+                    }
+                } catch (err) {
+                    console.warn('No se pudieron leer las rutas de Firebase:', err);
+                }
+            }
+
+            actualizarBadgeRutas();
+            renderSelectorDiasRuta();
+            if (vistaActual === 'ruta') {
+                seleccionarDiaRuta(diaRutaSeleccionado);
+            }
+        }
+
+        function actualizarBadgeRutas() {
+            const badge = document.getElementById('badge-ruta-disponible');
+            const totalRutasConPuntos = Object.values(rutasViajeMap).filter(r => puntosRutaPrincipal(r).puntos.length > 0).length;
+            if (badge) {
+                badge.classList.toggle('hidden', totalRutasConPuntos === 0);
+            }
+        }
+
+        function renderSelectorDiasRuta() {
+            const container = document.getElementById('ruta-selector-dias');
+            if (!container) return;
+
+            // Agrupar días ordenados
+            const diasList = Array.isArray(allTripDias) ? allTripDias.slice().sort((a, b) => (a.numero || 0) - (b.numero || 0)) : [];
+            
+            let html = `
+            <button type="button" onclick="seleccionarDiaRuta('todos')" id="btn-sel-ruta-todos" class="dia-ruta-pill px-3.5 py-1.5 rounded-xl text-xs font-bold shrink-0 transition flex items-center gap-1.5 ${diaRutaSeleccionado === 'todos' ? 'bg-amber-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}">
+                <span>🗺️ Todo el viaje</span>
+            </button>`;
+
+            diasList.forEach(d => {
+                const rec = d.fecha ? rutasViajeMap[d.fecha] : null;
+                const tienePuntos = rec && puntosRutaPrincipal(rec).puntos.length > 0;
+                const isSelected = diaRutaSeleccionado === d.fecha;
+
+                html += `
+                <button type="button" onclick="seleccionarDiaRuta('${d.fecha}')" id="btn-sel-ruta-${d.fecha}" class="dia-ruta-pill px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition flex items-center gap-1.5 ${isSelected ? 'bg-amber-600 text-white shadow-sm' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}">
+                    <span class="w-2 h-2 rounded-full ${tienePuntos ? 'bg-emerald-500' : 'bg-gray-300'}" title="${tienePuntos ? 'Ruta sincronizada' : 'Sin ruta registrada'}"></span>
+                    <span>Día ${d.numero}: ${d.destino || formatFecha(d.fecha)}</span>
+                </button>`;
+            });
+
+            container.innerHTML = html;
+        }
+
+        /* ---- Inicialización de Leaflet ---- */
+        function initMapaRecorrido() {
+            if (mapaRecorrido) return;
+            const container = document.getElementById('mapa-recorrido');
+            if (!container) return;
+
+            // Centro inicial en el Río de la Plata o coordenada por defecto
+            mapaRecorrido = L.map('mapa-recorrido', {
+                zoomControl: true,
+                attributionControl: true
+            }).setView([-34.5, -56.0], 7);
+
+            // Capa OpenStreetMap: 100% libre, sin API key ni marcas de agua
+            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(mapaRecorrido);
+
+            // Capas de Polilínea: completa (guía suave) y recorrida (dinámica vibrante)
+            layerFullTrack = L.polyline([], {
+                color: '#b45309',
+                weight: 3,
+                opacity: 0.35,
+                dashArray: '6, 8',
+                lineJoin: 'round'
+            }).addTo(mapaRecorrido);
+
+            layerTraveledTrack = L.polyline([], {
+                color: '#d97706',
+                weight: 5,
+                opacity: 0.95,
+                lineCap: 'round',
+                lineJoin: 'round'
+            }).addTo(mapaRecorrido);
+
+            // Marcador viajero animado
+            const travelerIcon = L.divIcon({
+                className: 'traveler-marker-container',
+                html: '<div class="pulsing-marker"><span style="font-size:11px;line-height:1;margin-left:1px;">🚗</span></div>',
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            });
+            markerViajero = L.marker([0, 0], { icon: travelerIcon, zIndexOffset: 1000 });
+
+            // Marcador de inicio (verde) y fin (rojo)
+            const pinInicio = L.divIcon({
+                className: 'start-pin-icon',
+                html: '<div style="background:#059669;color:white;font-size:10px;font-weight:bold;padding:2px 6px;border-radius:8px;box-shadow:0 2px 5px rgba(0,0,0,0.3);white-space:nowrap;border:1.5px solid white;">🟢 Inicio</div>',
+                iconAnchor: [24, 12]
+            });
+            const pinFin = L.divIcon({
+                className: 'end-pin-icon',
+                html: '<div style="background:#dc2626;color:white;font-size:10px;font-weight:bold;padding:2px 6px;border-radius:8px;box-shadow:0 2px 5px rgba(0,0,0,0.3);white-space:nowrap;border:1.5px solid white;">🏁 Fin</div>',
+                iconAnchor: [18, 12]
+            });
+            markerInicio = L.marker([0, 0], { icon: pinInicio });
+            markerFin = L.marker([0, 0], { icon: pinFin });
+        }
+
+        /* ---- Selección de Día y Preparación de Puntos ---- */
+        function seleccionarDiaRuta(diaKey) {
+            diaRutaSeleccionado = diaKey;
+            pausarRuta();
+            renderSelectorDiasRuta();
+
+            const titEl = document.getElementById('ruta-dia-titulo');
+            const subEl = document.getElementById('ruta-dia-subtitulo');
+            const emptyOverlay = document.getElementById('ruta-vacio-overlay');
+
+            let puntos = [];
+            let diaObj = null;
+
+            if (diaKey === 'todos') {
+                if (titEl) titEl.textContent = 'Todo el viaje';
+                if (subEl) subEl.textContent = 'Recorrido consolidado de todos los días registrados';
+                
+                // Recopilar todos los puntos de todas las fechas ordenados cronológicamente
+                const fechasOrdenadas = Object.keys(rutasViajeMap).sort();
+                fechasOrdenadas.forEach(f => {
+                    const record = rutasViajeMap[f];
+                    const pts = puntosRutaPrincipal(record).puntos;
+                    if (pts && pts.length) {
+                        puntos.push(...pts);
+                    }
+                });
+                puntos.sort((a, b) => (Number(a.ts) || 0) - (Number(b.ts) || 0));
+            } else {
+                diaObj = allTripDias.find(d => d.fecha === diaKey);
+                const diaNum = diaObj ? `Día ${diaObj.numero}: ` : '';
+                const dest = diaObj ? (diaObj.destino || formatFecha(diaKey)) : formatFecha(diaKey);
+                if (titEl) titEl.textContent = diaNum + dest;
+                if (subEl) subEl.textContent = formatFecha(diaKey) + (diaObj && diaObj.recorrido ? ` &bull; ${diaObj.recorrido}` : '');
+
+                const record = rutasViajeMap[diaKey];
+                const res = puntosRutaPrincipal(record);
+                puntos = res.puntos ? res.puntos.slice() : [];
+                puntos.sort((a, b) => (Number(a.ts) || 0) - (Number(b.ts) || 0));
+            }
+
+            puntosActivos = puntos.filter(p => Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng)));
+
+            if (puntosActivos.length === 0) {
+                if (emptyOverlay) emptyOverlay.classList.remove('hidden');
+                limpiarCapasMapa();
+                actualizarHUD(0, 0, 0, null, null);
+                return;
+            }
+
+            if (emptyOverlay) emptyOverlay.classList.add('hidden');
+            dibujarRutaEnMapa();
+        }
+
+        function limpiarCapasMapa() {
+            if (!mapaRecorrido) return;
+            if (layerFullTrack) layerFullTrack.setLatLngs([]);
+            if (layerTraveledTrack) layerTraveledTrack.setLatLngs([]);
+            if (mapaRecorrido.hasLayer(markerViajero)) mapaRecorrido.removeLayer(markerViajero);
+            if (mapaRecorrido.hasLayer(markerInicio)) mapaRecorrido.removeLayer(markerInicio);
+            if (mapaRecorrido.hasLayer(markerFin)) mapaRecorrido.removeLayer(markerFin);
+        }
+
+        function dibujarRutaEnMapa() {
+            if (!mapaRecorrido || puntosActivos.length === 0) return;
+            initMapaRecorrido();
+
+            const latLngs = puntosActivos.map(p => [Number(p.lat), Number(p.lng)]);
+            layerFullTrack.setLatLngs(latLngs);
+
+            const first = latLngs[0];
+            const last = latLngs[latLngs.length - 1];
+
+            markerInicio.setLatLng(first).addTo(mapaRecorrido);
+            markerFin.setLatLng(last).addTo(mapaRecorrido);
+
+            // Ajustar vista del mapa para encuadrar la ruta
+            const bounds = L.latLngBounds(latLngs);
+            mapaRecorrido.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+
+            // Reiniciar reproductor al inicio
+            currentPointIndex = 0;
+            actualizarEstadoReproductor(0);
+        }
+
+        /* ---- Reproductor Dinámico y Animación ---- */
+        function togglePlayRuta() {
+            if (puntosActivos.length === 0) return;
+            if (isPlaying) {
+                pausarRuta();
+            } else {
+                iniciarRuta();
+            }
+        }
+
+        function iniciarRuta() {
+            if (puntosActivos.length === 0) return;
+            if (currentPointIndex >= puntosActivos.length - 1) {
+                currentPointIndex = 0;
+            }
+            isPlaying = true;
+            actualizarBotonPlay();
+            lastFrameTimestamp = performance.now();
+            if (!mapaRecorrido.hasLayer(markerViajero)) markerViajero.addTo(mapaRecorrido);
+            animFrameId = requestAnimationFrame(bucleAnimacion);
+        }
+
+        function pausarRuta() {
+            isPlaying = false;
+            actualizarBotonPlay();
+            if (animFrameId) {
+                cancelAnimationFrame(animFrameId);
+                animFrameId = null;
+            }
+        }
+
+        function reiniciarRuta() {
+            pausarRuta();
+            currentPointIndex = 0;
+            actualizarEstadoReproductor(0);
+            if (mapaRecorrido && puntosActivos.length > 0) {
+                const bounds = L.latLngBounds(puntosActivos.map(p => [p.lat, p.lng]));
+                mapaRecorrido.fitBounds(bounds, { padding: [40, 40] });
+            }
+        }
+
+        function bucleAnimacion(now) {
+            if (!isPlaying) return;
+            const deltaSec = Math.min((now - lastFrameTimestamp) / 1000, 0.1);
+            lastFrameTimestamp = now;
+
+            // Velocidad base: recorrer toda la ruta en ~25 segundos a 1x
+            const basePointsPerSec = Math.max(puntosActivos.length / 25, 4);
+            const avance = basePointsPerSec * velocidadReproduccion * deltaSec;
+
+            currentPointIndex += avance;
+
+            if (currentPointIndex >= puntosActivos.length - 1) {
+                currentPointIndex = puntosActivos.length - 1;
+                actualizarEstadoReproductor(currentPointIndex);
+                pausarRuta();
+                return;
+            }
+
+            actualizarEstadoReproductor(currentPointIndex);
+            animFrameId = requestAnimationFrame(bucleAnimacion);
+        }
+
+        // Obtiene coordenadas interpoladas suavemente entre dos puntos GPS
+        function getCoordsInterpoladas(indexFloat) {
+            const i = Math.floor(indexFloat);
+            const frac = indexFloat - i;
+            const p1 = puntosActivos[i];
+            const p2 = puntosActivos[Math.min(i + 1, puntosActivos.length - 1)];
+
+            if (!p2 || frac === 0) return [Number(p1.lat), Number(p1.lng), p1.ts];
+
+            const lat = Number(p1.lat) + (Number(p2.lat) - Number(p1.lat)) * frac;
+            const lng = Number(p1.lng) + (Number(p2.lng) - Number(p1.lng)) * frac;
+            const ts = p1.ts ? (Number(p1.ts) + ((Number(p2.ts) || p1.ts) - Number(p1.ts)) * frac) : null;
+            return [lat, lng, ts];
+        }
+
+        function actualizarEstadoReproductor(indexFloat) {
+            if (puntosActivos.length === 0) return;
+
+            const iFloor = Math.floor(indexFloat);
+            const [currentLat, currentLng, currentTs] = getCoordsInterpoladas(indexFloat);
+            const currentLatLng = L.latLng(currentLat, currentLng);
+
+            // 1. Actualizar polilínea recorrida dinámica
+            const latLngsRecorridos = puntosActivos.slice(0, iFloor + 1).map(p => [Number(p.lat), Number(p.lng)]);
+            latLngsRecorridos.push(currentLatLng);
+            layerTraveledTrack.setLatLngs(latLngsRecorridos);
+
+            // 2. Mover marcador del viajero
+            if (!mapaRecorrido.hasLayer(markerViajero)) markerViajero.addTo(mapaRecorrido);
+            markerViajero.setLatLng(currentLatLng);
+
+            // 3. Seguimiento automático con la cámara del mapa
+            if (autoFollow && isPlaying) {
+                mapaRecorrido.panTo(currentLatLng, { animate: false });
+            }
+
+            // 4. Actualizar Slider y HUD
+            const percent = (indexFloat / (puntosActivos.length - 1)) * 100;
+            const slider = document.getElementById('player-slider');
+            if (slider && !slider.matches(':active')) {
+                slider.value = percent.toFixed(1);
+            }
+
+            // Distancia acumulada hasta el punto actual
+            const puntosRecorridos = puntosActivos.slice(0, iFloor + 1);
+            puntosRecorridos.push({ lat: currentLat, lng: currentLng });
+            const distRecorrida = distanciaRutaKm(puntosRecorridos);
+            const distTotal = distanciaRutaKm(puntosActivos);
+
+            actualizarHUD(distRecorrida, distTotal, puntosActivos.length, currentTs, percent);
+        }
+
+        function onPlayerSliderInput(percentVal) {
+            if (puntosActivos.length === 0) return;
+            const percent = Number(percentVal);
+            currentPointIndex = (percent / 100) * (puntosActivos.length - 1);
+            actualizarEstadoReproductor(currentPointIndex);
+        }
+
+        function setVelocidadRuta(vel) {
+            velocidadReproduccion = vel;
+            [1, 3, 6, 12].forEach(v => {
+                const btn = document.getElementById('speed-' + v);
+                if (btn) btn.classList.toggle('active', v === vel);
+            });
+        }
+
+        function toggleAutoFollow() {
+            autoFollow = !autoFollow;
+            const btn = document.getElementById('btn-toggle-follow');
+            if (btn) {
+                btn.className = autoFollow
+                    ? 'px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/80 rounded-xl text-xs font-bold transition flex items-center gap-1'
+                    : 'px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-500 rounded-xl text-xs font-bold transition flex items-center gap-1';
+            }
+            if (autoFollow && puntosActivos.length > 0) {
+                centrarMapaEnPuntoActual();
+            }
+        }
+
+        function centrarMapaEnPuntoActual() {
+            if (!mapaRecorrido || puntosActivos.length === 0) return;
+            const [lat, lng] = getCoordsInterpoladas(currentPointIndex);
+            mapaRecorrido.panTo([lat, lng], { animate: true });
+        }
+
+        function actualizarBotonPlay() {
+            const icon = document.getElementById('btn-play-icon');
+            const txt = document.getElementById('btn-play-text');
+            if (icon) icon.textContent = isPlaying ? '⏸' : '▶';
+            if (txt) txt.textContent = isPlaying ? 'Pausar' : 'Iniciar recorrido';
+        }
+
+        function formatHoraPunto(ts) {
+            if (!ts) return '--:--';
+            const d = new Date(Number(ts));
+            return Number.isFinite(d.getTime()) ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
+        }
+
+        function actualizarHUD(distRecorrida, distTotal, numPuntos, currentTs, percent) {
+            const hudDist = document.getElementById('hud-distancia');
+            const hudPts = document.getElementById('hud-puntos');
+            const hudProg = document.getElementById('hud-progreso');
+            const horaAct = document.getElementById('player-hora-actual');
+            const horaFin = document.getElementById('player-hora-fin');
+
+            if (hudDist) {
+                hudDist.textContent = distTotal ? `${distRecorrida.toFixed(1)} / ${distTotal.toFixed(1)} km` : '0 km';
+            }
+            if (hudPts) {
+                hudPts.textContent = String(numPuntos || 0);
+            }
+            if (hudProg) {
+                hudProg.textContent = Math.round(percent || 0) + '%';
+            }
+            if (horaAct) {
+                horaAct.textContent = formatHoraPunto(currentTs || (puntosActivos[0] && puntosActivos[0].ts));
+            }
+            if (horaFin && puntosActivos.length > 0) {
+                horaFin.textContent = formatHoraPunto(puntosActivos[puntosActivos.length - 1].ts);
+            }
+        }
+
+        /* ---- Cálculos de Distancia GPS ---- */
+        function distanciaMetros(a, b) {
+            if (!a || !b) return 0;
+            const rad = Math.PI / 180;
+            const p1 = Number(a.lat) * rad;
+            const p2 = Number(b.lat) * rad;
+            const dp = (Number(b.lat) - Number(a.lat)) * rad;
+            const dl = (Number(b.lng) - Number(a.lng)) * rad;
+            const h = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+            return 6371000 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(Math.max(0, 1 - h)));
+        }
+
+        function distanciaRutaKm(points) {
+            if (!Array.isArray(points) || points.length < 2) return 0;
+            let total = 0;
+            for (let i = 1; i < points.length; i++) {
+                total += distanciaMetros(points[i - 1], points[i]);
+            }
+            return total / 1000;
+        }
+
         initPublicApp();
     </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a38805577edc1eba',t:'MTc4ODk3NjA3NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a38aa6751ba4dd2e',t:'MTc4OTAwMzY0Ng=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
