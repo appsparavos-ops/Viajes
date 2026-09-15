@@ -39,6 +39,41 @@
         /* Estilos de la Pestaña Ruta y Reproductor Dinámico */
         .speed-btn.active { background-color: #d97706; color: white; }
         .tab-btn-main.active { background-color: #d97706; color: white; border-color: #d97706; }
+
+        /* Botón "Invitar" de la barra superior (solo ícono, verde WhatsApp) */
+        .btn-invitar {
+            width: 2.25rem; height: 2.25rem;
+            display: inline-flex; align-items: center; justify-content: center;
+            border-radius: 0.75rem; background-color: #25D366; color: #fff;
+            font-size: 1.05rem; line-height: 1; flex: 0 0 auto;
+            transition: background-color .15s ease, transform .1s ease;
+        }
+        .btn-invitar:hover { background-color: #1da851; }
+        .btn-invitar:active { transform: scale(.93); }
+        .btn-invitar svg { display: block; }
+
+        /* Aviso flotante (toast) de la vista pública */
+        #toast-publico {
+            position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 400; max-width: 80vw;
+            background: #1f2937; color: #fff; padding: .75rem 1.25rem;
+            border-radius: .75rem; box-shadow: 0 10px 25px rgba(0,0,0,.25);
+            font-size: .8rem; font-weight: 600;
+        }
+        #toast-publico.hidden { display: none; }
+
+        /* Pantallas muy chicas (≤400px): la barra tiene pestañas + índice de días +
+           Galería + Invitar; se ajustan los espacios para que nada quede recortado. */
+        /* Se prefijan con "nav" porque Tailwind se inyecta después de este bloque
+           (misma especificidad => ganarían sus utilidades px-4 / px-3.5 / ml-2 / pl-3). */
+        @media (max-width: 400px) {
+            nav .nav-fila { padding-left: .5rem; padding-right: .5rem; gap: .5rem; }
+            nav .tab-btn-main { padding-left: .5rem; padding-right: .5rem; }
+            nav .btn-galeria { margin-left: .25rem; padding-left: .5rem; }
+            nav .btn-invitar { margin-left: .25rem; }
+        }
+        @media (max-width: 360px) {
+            nav .tab-btn-main { font-size: .65rem; padding-left: .35rem; padding-right: .35rem; letter-spacing: 0; }
+        }
         .pulsing-marker {
             width: 22px;
             height: 22px;
@@ -111,7 +146,7 @@
 
     <!-- Navegación pegajosa (Índice y Pestañas) -->
     <nav class="bg-white/95 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50 transition-all shadow-sm">
-        <div class="max-w-6xl mx-auto px-4 py-2.5 flex items-center justify-between gap-3">
+        <div class="nav-fila max-w-6xl mx-auto px-4 py-2.5 flex items-center justify-between gap-3">
             <!-- Pestañas de Vista -->
             <div class="flex items-center gap-1.5 shrink-0">
                 <button id="tab-btn-diario" type="button" onclick="cambiarVistaPrincipal('diario')" class="tab-btn-main active px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider rounded-xl border border-transparent shadow-sm transition">
@@ -127,14 +162,18 @@
             <div class="h-5 w-[1px] bg-gray-200 hidden sm:block"></div>
 
             <!-- Índice de días para el diario -->
-            <div class="overflow-x-auto flex flex-1 gap-5 items-center font-serif text-sm italic text-gray-500 whitespace-nowrap hide-scrollbar" id="nav-dias">
+            <div class="overflow-x-auto flex flex-1 min-w-0 gap-5 items-center font-serif text-sm italic text-gray-500 whitespace-nowrap hide-scrollbar" id="nav-dias">
                 Cargando el índice...
             </div>
 
             <!-- Botón Galería -->
-            <button onclick="abrirGaleriaTotal()" class="ml-2 pl-3 border-l border-gray-300 text-xs font-bold text-gray-900 uppercase tracking-widest hover:text-amber-700 whitespace-nowrap flex items-center gap-1 shrink-0">
-                <span>📷 Galería</span>
+            <button onclick="abrirGaleriaTotal()" class="btn-galeria ml-2 pl-3 border-l border-gray-300 text-xs font-bold text-gray-900 uppercase tracking-widest hover:text-amber-700 whitespace-nowrap flex items-center gap-1 shrink-0" title="Galería" aria-label="Galería">
+                <span>📷<span class="hidden sm:inline"> Galería</span></span>
             </button>
+            <!-- Invitar: permite que cualquier visitante re-comparta el viaje -->
+            <button type="button" id="btn-invitar" onclick="invitarAlViaje()"
+                    class="btn-invitar ml-2" title="Invitar a seguir el viaje"
+                    aria-label="Invitar a seguir el viaje" data-label="Invitar a seguir el viaje"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg></button>
         </div>
     </nav>
 
@@ -237,10 +276,10 @@
 
                     <div class="flex items-center gap-1 bg-gray-100 p-1 rounded-xl text-xs font-bold">
                         <span class="text-gray-400 text-[10px] px-1 uppercase tracking-wider hidden sm:inline">Velocidad:</span>
-                        <button type="button" onclick="setVelocidadRuta(0.25)" class="speed-btn px-2.5 py-1 rounded-lg transition" id="speed-0.25">0.25x</button>
-                        <button type="button" onclick="setVelocidadRuta(0.5)" class="speed-btn px-2.5 py-1 rounded-lg transition" id="speed-0.5">0.5x</button>
-                        <button type="button" onclick="setVelocidadRuta(1)" class="speed-btn active px-2.5 py-1 rounded-lg transition" id="speed-1">1x</button>
-                        <button type="button" onclick="setVelocidadRuta(2)" class="speed-btn px-2.5 py-1 rounded-lg transition" id="speed-2">2x</button>
+                        <button type="button" onclick="setVelocidadRuta(0.25)" class="speed-btn active px-2.5 py-1 rounded-lg transition" id="speed-0.25">1x</button>
+                        <button type="button" onclick="setVelocidadRuta(0.5)" class="speed-btn px-2.5 py-1 rounded-lg transition" id="speed-0.5">2x</button>
+                        <button type="button" onclick="setVelocidadRuta(1)" class="speed-btn px-2.5 py-1 rounded-lg transition" id="speed-1">4x</button>
+                        <button type="button" onclick="setVelocidadRuta(2)" class="speed-btn px-2.5 py-1 rounded-lg transition" id="speed-2">8x</button>
                     </div>
                 </div>
             </div>
@@ -254,6 +293,34 @@
     </footer>
 
     <!-- Lightbox -->
+    <!-- Modal de invitación: se usa en modo 'modal' y como respaldo cuando el
+         empaquetador de la APK bloquea la apertura automática de WhatsApp. -->
+    <div id="modal-invitar" class="hidden fixed inset-0 z-[220] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div class="px-5 py-3 text-white flex items-center justify-between" style="background-color:#25D366">
+                <h3 class="font-bold text-sm"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" style="display:inline-block;vertical-align:-2px"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg> Invitar a seguir el viaje</h3>
+                <button type="button" onclick="cerrarModalInvitar()" class="text-2xl leading-none" aria-label="Cerrar">&times;</button>
+            </div>
+            <div class="p-5 space-y-3">
+                <p id="invitar-aviso" class="hidden text-xs font-semibold text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    ⚠️ No pudimos abrir WhatsApp automáticamente. Copiá el mensaje y pegalo en el chat.
+                </p>
+                <p class="text-xs text-gray-500">Este es el mensaje que se enviará. Podés editarlo antes de enviar.</p>
+                <textarea id="invitar-mensaje" rows="6" class="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"></textarea>
+                <button type="button" onclick="enviarInvitacionWhatsApp()" class="w-full py-2.5 text-white rounded-xl text-sm font-bold transition" style="background-color:#25D366">
+                    📲 Enviar por WhatsApp
+                </button>
+                <div class="flex gap-2">
+                    <button type="button" onclick="copiarInvitacion()" class="flex-1 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition">📋 Copiar mensaje</button>
+                    <button type="button" onclick="copiarEnlaceInvitacion()" class="flex-1 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl text-xs font-bold text-gray-700 transition">🔗 Copiar enlace</button>
+                </div>
+                <p id="invitar-enlace" class="text-[11px] text-gray-400 break-all"></p>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-publico" class="hidden"></div>
+
     <div id="lightbox" onclick="closeLightbox()">
         <button class="absolute top-6 right-8 text-white text-4xl hover:text-amber-400 transition" onclick="closeLightbox()">&times;</button>
         <button class="absolute left-4 md:left-12 text-white text-5xl p-4 hover:text-amber-400 transition" onclick="event.stopPropagation(); changePhoto(-1)">&#8249;</button>
@@ -1384,9 +1451,248 @@
             return arr;
         }
 
+
+        /* ================= INVITAR A SEGUIR EL VIAJE (WhatsApp) =================
+           Arma el enlace público del viaje que se está viendo
+           (viaje.html?user=...&id=...), lo acorta para que el mensaje quede corto
+           y abre WhatsApp con la invitación ya escrita y el selector de contactos.
+
+           Decisiones de diseño:
+           • El enlace lleva user+id porque viaje.html, sin parámetros, muestra
+             "Borrador local" en vez del viaje.
+           • En la APK (WebView) window.open suele estar bloqueado: se prueban
+             varias vías y, si ninguna abre WhatsApp, aparece el mensaje en un
+             modal para copiarlo: nunca se pierde la invitación.
+           • El acortado se guarda en caché: el mismo viaje no se acorta dos veces.
+           ---------------------------------------------------------------------- */
+        const INVITAR = {
+            sitio: 'https://appsparavos-ops.github.io/Viajes/viaje.html',
+            // 'directo' = al tocar 📤 abre WhatsApp con el mensaje listo.
+            // 'modal'   = muestra el texto antes de enviar (para revisarlo/editarlo).
+            modo: 'directo',
+            texto: '🚗 *Bitácora de Viaje* — ¡Te invito a seguir nuestro viaje «{titulo}»!\n' +
+                   '📸 Fotos, relatos y recorrido GPS en vivo.\n' +
+                   '👉 clic aquí: {link}',
+            acortadores: [
+                u => 'https://da.gd/shorten?url=' + encodeURIComponent(u),
+                u => 'https://clck.ru/--?url=' + encodeURIComponent(u)
+            ]
+        };
+
+        /* Enlace público del viaje actual, o null si falta algo. */
+        function enlaceInvitacion() {
+            if (!currentUsername || !currentViajeId) return null;
+            return `${INVITAR.sitio}?user=${encodeURIComponent(currentUsername)}&id=${encodeURIComponent(currentViajeId)}`;
+        }
+
+        /* Acorta el enlace con el primer servicio que responda. */
+        async function acortarEnlace(largo) {
+            const CLAVE = 'travelapp_inv_short';
+            try {
+                const cache = JSON.parse(localStorage.getItem(CLAVE) || '{}');
+                if (cache[largo]) return cache[largo];
+            } catch (e) { /* caché ilegible: se sigue igual */ }
+
+            for (const crear of INVITAR.acortadores) {
+                try {
+                    const ctrl = new AbortController();
+                    const t = setTimeout(() => ctrl.abort(), 6000);
+                    const r = await fetch(crear(largo), { signal: ctrl.signal });
+                    clearTimeout(t);
+                    const txt = (await r.text()).trim();
+                    if (r.ok && /^https?:\/\/\S+$/.test(txt) && txt.length < largo.length) {
+                        try {
+                            const cache = JSON.parse(localStorage.getItem(CLAVE) || '{}');
+                            cache[largo] = txt;
+                            localStorage.setItem(CLAVE, JSON.stringify(cache));
+                        } catch (e) { /* sin almacenamiento: no pasa nada */ }
+                        return txt;
+                    }
+                } catch (e) { /* se prueba el siguiente acortador */ }
+            }
+            return largo;
+        }
+
+        /* Mensaje final con el título del viaje y el enlace ya resueltos. */
+        function armarMensajeInvitacion(link) {
+            const titulo = (typeof tituloViajeActual === 'function' ? tituloViajeActual() : '') || 'nuestro viaje';
+            return INVITAR.texto.replace('{titulo}', titulo).replace('{link}', link);
+        }
+
+        /* Abre WhatsApp con el mensaje. Varias vías porque los empaquetadores de la
+           APK bloquean parte de ellas:
+             1) WhatsApp instalado (whatsapp:// con window.open _system)
+             2) WhatsApp Web / app de escritorio (wa.me en pestaña nueva)
+             3) Si nada abrió → alFallar() para que el usuario copie el mensaje. */
+        function enviarPorWhatsApp(texto, alFallar) {
+            const enc = encodeURIComponent(texto);
+            const app = 'whatsapp://send?text=' + enc;
+            const web = 'https://wa.me/?text=' + enc;
+            const esMovil = !!window.cordova || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+
+            const clickOculto = (href, target) => {
+                const a = document.createElement('a');
+                a.href = href;
+                if (target) { a.target = target; a.rel = 'noopener'; }
+                a.style.display = 'none';
+                document.body.appendChild(a);
+                if (typeof a.click === 'function') a.click();
+                setTimeout(() => a.remove(), 0);
+                return a;
+            };
+
+            if (esMovil) {
+                let abrio = false;
+                try { abrio = !!window.open(app, '_system'); } catch (e) { abrio = false; }
+                if (!abrio) clickOculto(app);
+                setTimeout(() => {
+                    if (document.visibilityState !== 'visible') return;   // WhatsApp se abrió
+                    clickOculto(web, '_blank');
+                    setTimeout(() => {
+                        if (document.visibilityState === 'visible' && typeof alFallar === 'function') alFallar();
+                    }, 1200);
+                }, 1600);
+            } else {
+                let w = null;
+                try { w = window.open(web, '_blank'); } catch (e) { w = null; }
+                if (!w) clickOculto(web, '_blank');
+                setTimeout(() => { if (!w && typeof alFallar === 'function') alFallar(); }, 600);
+            }
+        }
+
+        /* Copia al portapapeles con respaldo: en la APK/WebView la API moderna puede
+           no existir o rechazar la operación (contexto no seguro). */
+        function copiarTexto(texto) {
+            const respaldo = () => new Promise(resolve => {
+                try {
+                    const ta = document.createElement('textarea');
+                    ta.value = texto;
+                    ta.style.position = 'fixed';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    ta.setSelectionRange(0, ta.value.length);
+                    document.execCommand('copy');
+                    ta.remove();
+                } catch (e) { /* sin permiso: igual se avisa al usuario */ }
+                resolve();
+            });
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    return navigator.clipboard.writeText(texto).catch(respaldo);
+                }
+            } catch (e) { /* se usa el respaldo */ }
+            return respaldo();
+        }
+
+        /* ---------------- Modal de invitación (modo 'modal' y respaldo) -------- */
+        function abrirModalInvitar(mensaje, link, aviso) {
+            const m = document.getElementById('modal-invitar');
+            if (!m) {   // sin modal (por ejemplo si se quitó del HTML): se copia y listo
+                copiarTexto(mensaje).then(() => toast('📋 Invitación copiada. Pegala en WhatsApp.'));
+                return;
+            }
+            const ta = document.getElementById('invitar-mensaje');
+            const enlace = document.getElementById('invitar-enlace');
+            const nota = document.getElementById('invitar-aviso');
+            if (ta) ta.value = mensaje;
+            if (enlace) enlace.textContent = link || '';
+            if (nota) nota.classList.toggle('hidden', !aviso);
+            m.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+        function cerrarModalInvitar() {
+            const m = document.getElementById('modal-invitar');
+            if (m) m.classList.add('hidden');
+            document.body.style.overflow = '';
+        }
+        function enviarInvitacionWhatsApp() {
+            const ta = document.getElementById('invitar-mensaje');
+            const texto = ta ? ta.value : '';
+            if (!texto) return;
+            enviarPorWhatsApp(texto, () => {
+                copiarTexto(texto).then(() => toast('📋 No pudimos abrir WhatsApp: la invitación quedó copiada.'));
+            });
+        }
+        function copiarInvitacion() {
+            const ta = document.getElementById('invitar-mensaje');
+            copiarTexto(ta ? ta.value : '').then(() => toast('📋 Mensaje copiado. Pegalo en WhatsApp.'));
+        }
+        function copiarEnlaceInvitacion() {
+            const el = document.getElementById('invitar-enlace');
+            copiarTexto(el ? el.textContent : '').then(() => toast('🔗 Enlace copiado.'));
+        }
+
+        /* Título del viaje que se está viendo (lo toma del selector de viajes). */
+        function tituloViajeActual() {
+            try {
+                const sel = document.getElementById('select-viaje-publico');
+                if (!sel || sel.selectedIndex < 0) return '';
+                const t = (sel.options[sel.selectedIndex].text || '').trim();
+                return t.startsWith('(') ? '' : t;
+            } catch (e) { return ''; }
+        }
+
+        /* Aviso flotante propio de esta página (el panel tiene el suyo). */
+        function toast(mensaje) {
+            let el = document.getElementById('toast-publico');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'toast-publico';
+                document.body.appendChild(el);
+            }
+            el.textContent = mensaje;
+            el.classList.remove('hidden');
+            clearTimeout(toast._t);
+            toast._t = setTimeout(() => el.classList.add('hidden'), 3000);
+        }
+
+        /* Etiqueta al mantener pulsado el botón (en el celular no hay tooltips). */
+        (function etiquetaPulsacionLargaInvitacion() {
+            let timer = null;
+            const cancelar = () => { if (timer) { clearTimeout(timer); timer = null; } };
+            const programar = (ev, ms) => {
+                const btn = ev.target && ev.target.closest ? ev.target.closest('.btn-invitar') : null;
+                if (!btn) return;
+                cancelar();
+                timer = setTimeout(() => {
+                    timer = null;
+                    toast('ℹ️ ' + (btn.dataset.label || btn.title || ''));
+                }, ms);
+            };
+            document.addEventListener('touchstart', e => programar(e, 450), { passive: true });
+            document.addEventListener('mousedown', e => programar(e, 600));
+            ['touchend', 'touchcancel', 'touchmove', 'scroll', 'mouseup', 'mouseleave'].forEach(ev =>
+                document.addEventListener(ev, cancelar, { passive: true }));
+        })();
+
+        /* Botón 📤 de la barra superior. */
+        async function invitarAlViaje() {
+            if (esBorradorLocal()) {
+                toast('🧾 Esta bitácora es un borrador local: todavía no está publicada para invitar.');
+                return;
+            }
+            const largo = enlaceInvitacion();
+            if (!largo) { toast('No hay un viaje publicado para invitar.'); return; }
+
+            toast('📤 Preparando la invitación…');
+            const link = await acortarEnlace(largo);
+            const mensaje = armarMensajeInvitacion(link);
+
+            if (INVITAR.modo === 'modal') {
+                abrirModalInvitar(mensaje, link);
+            } else {
+                enviarPorWhatsApp(mensaje, () => abrirModalInvitar(mensaje, link, true));
+            }
+        }
         initPublicApp();
+
+        // En modo borrador la bitácora no está publicada: no hay nada que invitar.
+        if (esBorradorLocal()) {
+            const b = document.getElementById('btn-invitar');
+            if (b) b.classList.add('hidden');
+        }
     </script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a38aa6751ba4dd2e',t:'MTc4OTAwMzY0Ng=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3997740fb96d841',t:'MTc4OTE1ODk5OQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3aaa299a9eddb70',t:'MTc4OTMzOTAzMg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
