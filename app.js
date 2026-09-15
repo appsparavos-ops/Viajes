@@ -15,8 +15,23 @@ function getUserRoot() {
   return currentUsername || 'usuario_anonimo';
 }
 
+/* ---- Modo borrador local ----
+   Si la bitacora se creo sin cuenta, no hay nodo en Firebase: los gastos se
+   guardan en la MISMA cache local que usa viaje-admin.html, para que el panel y
+   el presupuesto los vean. */
+const DRAFT_USER = '_borrador_local';
+const DRAFT_KEYS = {
+  viajes: 'travelapp__borrador_local_viajes_cache',
+  viajeData: id => 'travelapp__borrador_local_viajedata_' + id,
+};
+
+function esBorradorLocal() {
+  if (currentUsername === DRAFT_USER) return true;
+  try { return urlParams.get('user') === DRAFT_USER; } catch (e) { return false; }
+}
+
 const CACHE_KEYS = {
-  get viajes() { return `ts_${getUserRoot()}_viajes_cache`; },
+  get viajes() { return esBorradorLocal() ? DRAFT_KEYS.viajes : `ts_${getUserRoot()}_viajes_cache`; },
   get viajeId() { return `ts_${getUserRoot()}_viaje_id`; },
   get syncQueue() { return `ts_${getUserRoot()}_sync_queue`; },
   gastosCache: id => `ts_${getUserRoot()}_gastos_${id}`,
@@ -71,6 +86,14 @@ function initApp() {
   initOcrWorker();
   updateStatusUI();
   renderOfflineBanner();
+
+  // Aviso de modo borrador local (datos solo en este dispositivo)
+  if (esBorradorLocal()) {
+    const aviso = document.getElementById('aviso-borrador');
+    if (aviso) aviso.classList.remove('hidden');
+    const desc = document.getElementById('viaje-desc');
+    if (desc) desc.textContent = 'Modo borrador: el gasto se guarda en este dispositivo (misma caché que el panel admin).';
+  }
 
   // Si hay un viaje guardado, recargar gastos y viajeros
   setTimeout(() => {
@@ -177,7 +200,7 @@ async function cargarViajes() {
   let viajes = [];
   let viaSource = 'offline';
 
-  if (db && isOnline) {
+  if (db && isOnline && !esBorradorLocal()) {
     try {
       const snap = await withTimeout(db.ref(`${getUserRoot()}/viajes_index`).once('value'), 6000);
       if (snap.exists()) {
@@ -239,7 +262,8 @@ const CACHE = {
   lastViajeId: 'travelapp_last_viaje_id',
   lastViaje: 'travelapp_last_viaje',
   syncQueue: 'travelapp_syncQueue',
-  viajeData: id => 'travelapp_viajedata_' + id,
+  // En modo borrador apunta a la cache local del panel admin.
+  viajeData: id => esBorradorLocal() ? DRAFT_KEYS.viajeData(id) : ('travelapp_viajedata_' + id),
   diasLegacy: id => 'travelapp_dias_' + id
 };
 
@@ -413,8 +437,8 @@ function cargarViajerosDelViaje() {
     }
     const cache = window.getViajeCache(currentViajeId);
     const cfg = cache.configuracion || {};
-    // Intentar cargar de Firebase
-    if (db && isOnline) {
+    // Intentar cargar de Firebase (no en modo borrador: ya se leyó de la cache)
+    if (db && isOnline && !esBorradorLocal()) {
       db.ref(`${getUserRoot()}/viajes_data/${currentViajeId}/configuracion/viajeros`).once('value').then(snap => {
         if (snap.exists()) {
           viajerosList = snap.val() || [];
@@ -447,7 +471,7 @@ function cargarMonedasDelViaje() {
     const cfg = cache.configuracion || {};
     let mList = cfg.monedas_gasto || ['AR$', 'US$', 'UY$'];
 
-    if (db && isOnline) {
+    if (db && isOnline && !esBorradorLocal()) {
       db.ref(`${getUserRoot()}/viajes_data/${currentViajeId}/configuracion/monedas_gasto`).once('value').then(snap => {
         if (snap.exists()) {
           mList = snap.val() || mList;
@@ -783,9 +807,14 @@ async function guardarGasto() {
   // 1) Guardar local inmediatamente (IndexedDB + localStorage backup)
   await saveToIndexedDB('gastos', gasto);
 
-  // 2) Intentar guardar en Firebase si hay conexión
+  // 2) Intentar guardar en Firebase si hay conexión (nunca en modo borrador)
   let wroteOnline = false;
-  if (db && isOnline) {
+  const enBorrador = esBorradorLocal();
+  if (enBorrador) {
+    // El gasto queda en la cache local del viaje (la lee el panel admin y el
+    // presupuesto). No se encola: no hay cuenta destino a la que sincronizar.
+    applyToCache('gastos/' + gasto.id, 'set', gasto, currentViajeId);
+  } else if (db && isOnline) {
     try {
       const refPath = `${getUserRoot()}/viajes_data/${currentViajeId}/gastos`;
       await withTimeout(db.ref(refPath).push({
@@ -800,7 +829,7 @@ async function guardarGasto() {
   }
 
   // 3) Si no se pudo escribir online, encolar para sincronizar
-  if (!wroteOnline) {
+  if (!wroteOnline && !enBorrador) {
     syncQueue.push({
       action: 'push',
       path: `viajes_data/${currentViajeId}/gastos`,
@@ -818,7 +847,8 @@ async function guardarGasto() {
   document.getElementById('field-monto').value = '';
   document.getElementById('field-detalle').value = '';
 
-  showToast(wroteOnline ? '✅ Gasto guardado en Firebase' : '💾 Gasto guardado (se sincronizará)', wroteOnline ? 'success' : 'warn');
+  if (enBorrador) showToast('🧾 Gasto guardado en este dispositivo (modo borrador)', 'success');
+  else showToast(wroteOnline ? '✅ Gasto guardado en Firebase' : '💾 Gasto guardado (se sincronizará)', wroteOnline ? 'success' : 'warn');
 }
 
 /* ================================================================
@@ -852,8 +882,8 @@ async function cargarGastos() {
     }
   } catch (e) {}
 
-  // Fuente 3: Firebase (fuente de verdad si hay conexión)
-  if (db && isOnline) {
+  // Fuente 3: Firebase (fuente de verdad si hay conexión; no en modo borrador)
+  if (db && isOnline && !esBorradorLocal()) {
     try {
       const snap = await withTimeout(db.ref(`${getUserRoot()}/viajes_data/${currentViajeId}/gastos`).once('value'), 6000);
       if (snap.exists()) {
@@ -934,6 +964,10 @@ async function cargarGastos() {
    SINCRONIZACIÓN — COLA PENDIENTE
    ================================================================ */
 async function syncPending(auto = false) {
+  if (esBorradorLocal()) {
+    if (!auto) showToast('🧾 Modo borrador: los gastos se guardan en este dispositivo', 'warn');
+    return;
+  }
   if (!db || !isOnline) {
     if (!auto) showToast('Sin conexión para sincronizar', 'warn');
     return;

@@ -10,6 +10,10 @@
     <style>body { font-family: 'Lato', sans-serif; background-color: #f8fafc; }</style>
 </head>
 <body class="text-slate-800">
+    <!-- Aviso: datos locales (modo borrador, sin cuenta) -->
+    <div id="aviso-borrador" class="hidden bg-amber-100 border-b border-amber-300 text-amber-900 text-sm px-4 py-2 text-center">
+        🧾 <strong>Modo borrador local</strong> — este viaje todavía no está publicado: los datos están solo en este dispositivo.
+    </div>
     <header class="bg-slate-900 text-white py-6 shadow-md">
         <div class="max-w-6xl mx-auto px-4 flex justify-between items-center flex-wrap gap-4">
             <div class="flex items-center gap-4">
@@ -109,6 +113,22 @@
 
         function getUserRoot() {
             return currentUsername || 'usuario_anonimo';
+        }
+
+        /* ---- Modo borrador local ----
+           Si la bitacora se creo sin cuenta, los datos viven SOLO en este
+           dispositivo (misma cache que escribe viaje-admin). Esta pagina no debe
+           consultar Firebase: usa la copia local. */
+        const DRAFT_USER = '_borrador_local';
+
+        function esBorradorLocal() {
+            if (currentUsername === DRAFT_USER) return true;
+            try { return urlParams.get('user') === DRAFT_USER; } catch (e) { return false; }
+        }
+
+        function mostrarAvisoBorrador() {
+            const aviso = document.getElementById('aviso-borrador');
+            if (aviso) aviso.classList.remove('hidden');
         }
 
         const TIMEOUT_MS = 6000;
@@ -248,6 +268,8 @@
         }
 
         async function leer(path, fallbackValue) {
+            // En modo borrador no hay cuenta en la nube: se usa la copia local.
+            if (esBorradorLocal()) return { data: fallbackValue, fromServer: false };
             if (FIREBASE_AVAILABLE && checkIsOnline() && currentViajeId) {
                 try {
                     const snap = await withTimeout(getRef(path).once('value'));
@@ -282,7 +304,12 @@
             let viajes = [];
             let viaSource = 'online';
 
-            if (FIREBASE_AVAILABLE && checkIsOnline()) {
+            if (esBorradorLocal()) {
+                // Modo borrador: lista de viajes desde la cache local.
+                mostrarAvisoBorrador();
+                viaSource = 'cache';
+                viajes = getCache(CACHE.viajes) || [];
+            } else if (FIREBASE_AVAILABLE && checkIsOnline()) {
                 try {
                     const snap = await withTimeout(db.ref(`${getUserRoot()}/viajes_index`).once('value'));
                     if (snap.exists()) {
@@ -367,7 +394,7 @@
 
                 // ── Cotizaciones diarias ──
                 let cotizacionesDias = cache.cotizaciones || {};
-                if (FIREBASE_AVAILABLE && checkIsOnline()) {
+                if (FIREBASE_AVAILABLE && checkIsOnline() && !esBorradorLocal()) {
                     try {
                         const cotizSnap = await withTimeout(getRef('cotizaciones').once('value'));
                         if (cotizSnap.exists()) {
@@ -401,7 +428,7 @@
 
                 // ── Gastos ──
                 let gastosBrutos = cache.gastos || [];
-                if (FIREBASE_AVAILABLE && checkIsOnline()) {
+                if (FIREBASE_AVAILABLE && checkIsOnline() && !esBorradorLocal()) {
                     try {
                         const gastosSnap = await withTimeout(getRef('gastos').orderByChild('fecha').once('value'));
                         if (gastosSnap.exists()) {
@@ -626,5 +653,6 @@
 
         solicitarActualizacion();
     </script>
-</body>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a38aa60cef9cdd2e',t:'MTc4OTAwMzYyOQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
