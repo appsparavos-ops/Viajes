@@ -13,9 +13,30 @@
   "background_color": "#fafaf9",
   "theme_color": "#b45309",
   "categories": ["travel", "lifestyle", "photo"],
+  "prefer_related_applications": false,
   "icons": [
     { "src": "icons/bitacora-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "icons/bitacora-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "icons/bitacora-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "screenshots": [
+    { "src": "screenshots/bitacora-wide.png", "sizes": "1280x720", "type": "image/png", "form_factor": "wide", "label": "El diario del viaje, día por día" },
+    { "src": "screenshots/bitacora-narrow.png", "sizes": "412x915", "type": "image/png", "form_factor": "narrow", "label": "Bitácora en el teléfono" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Diario del viaje",
+      "short_name": "Diario",
+      "description": "Abrir las entradas del viaje",
+      "url": "viaje.html?src=pwa&vista=diario",
+      "icons": [{ "src": "icons/bitacora-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Recorrido GPS",
+      "short_name": "Recorrido",
+      "description": "Abrir el mapa con el recorrido del viaje",
+      "url": "viaje.html?src=pwa&vista=ruta",
+      "icons": [{ "src": "icons/bitacora-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
   ]
 }

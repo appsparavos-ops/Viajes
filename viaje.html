@@ -530,12 +530,22 @@
                     currentViajeId = activo ? activo.id : null;
                 }
 
-                tripSelector.innerHTML = viajes.map(v => 
-                    `<option value="${v.id}" ${v.id === currentViajeId ? 'selected' : ''}>${v.titulo}</option>`
+                tripSelector.innerHTML = viajes.map(v =>
+                    `<option value="${v.id}" ${v.id === currentViajeId ? 'selected' : ''}>${v.titulo || 'Viaje sin título'}</option>`
                 ).join('');
 
                 cargarDias();
                 cargarRutasViaje();
+
+                // Accesos directos de la app instalada (Android: mantener presionado el
+                // ícono / Windows: lista de saltos de la barra de tareas): ?vista=ruta
+                // abre directamente el recorrido GPS.
+                try {
+                    const vistaPedida = new URLSearchParams(window.location.search).get('vista');
+                    if (vistaPedida === 'ruta') {
+                        setTimeout(() => cambiarVistaPrincipal('ruta'), 500);
+                    }
+                } catch (e) { /* ignorar */ }
             } catch (err) {
                 console.error('Error al cargar viajes del usuario:', err);
                 document.getElementById('main-content').innerHTML = usandoCopiaGuardada

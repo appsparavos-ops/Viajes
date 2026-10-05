@@ -181,6 +181,19 @@
             try {
                 if (typeof window.__APP_INSTALADA === 'boolean') return window.__APP_INSTALADA;
             } catch (e) { /* ignorar */ }
+            /* PWA instalada desde el navegador (Android, Windows, macOS, Linux).
+               Cuando se abre desde el ícono instalado, la app corre en su propia ventana
+               sin barra del navegador: eso es exactamente una "app instalada", y es el
+               caso más común en este ecosistema. Se detecta por display-mode (Chrome,
+               Edge y Samsung Internet) y por navigator.standalone (iPhone/iPad).
+               Sin esto, la sesión de Firebase quedaba en SESSION y había que iniciar
+               sesión cada vez que se abría la app instalada. */
+            try {
+                const mq = (q) => window.matchMedia && window.matchMedia(q).matches;
+                if (mq('(display-mode: standalone)') || mq('(display-mode: minimal-ui)') || mq('(display-mode: fullscreen)')) return true;
+                if (window.navigator.standalone === true) return true;
+                if (document.referrer && document.referrer.indexOf('android-app://') === 0) return true; // TWA de Android
+            } catch (e) { /* ignorar */ }
             const ua = (navigator.userAgent || '');
             const cap = (typeof window.Capacitor !== 'undefined') ? window.Capacitor : null;
             const esCapacitor = !!(cap && (
@@ -2044,7 +2057,7 @@
             // 3) Pintar selector y elegir viaje
             if (viajes.length > 0) {
                 selector.innerHTML = viajes.map(v =>
-                    `<option value="${escapeHtml(v.id)}">${escapeHtml(v.titulo)} ${v.activo ? '✅' : '⛔'}${viaSource === 'cache' ? ' (offline)' : ''}</option>`
+                    `<option value="${escapeHtml(v.id)}">${escapeHtml(v.titulo || 'Viaje sin título')} ${v.activo ? '✅' : '⛔'}${viaSource === 'cache' && !modoBorrador ? ' (offline)' : ''}</option>`
                 ).join('');
 
                 const savedId = getCache(CACHE.lastViajeId);
@@ -2112,7 +2125,7 @@
             if (!confirm(`¿Querés ${accion} este viaje?`)) return;
 
             // Online
-            if (FIREBASE_AVAILABLE && navigator.onLine) {
+            if (FIREBASE_AVAILABLE && navigator.onLine && !modoBorrador) {
                 try {
                     const snap = await withTimeout(db.ref(`${getUserRoot()}/viajes_index/` + currentViajeId).once('value'));
                     const activoServer = snap.exists() ? snap.val().activo : activo;
@@ -2141,7 +2154,7 @@
             const data = { titulo: titulo, activo: true, createdAt: "TIMESTAMP" };
 
             // Online
-            if (FIREBASE_AVAILABLE && navigator.onLine) {
+            if (FIREBASE_AVAILABLE && navigator.onLine && !modoBorrador) {
                 try {
                     const snap = await withTimeout(db.ref(`${getUserRoot()}/viajes_index`).once('value'));
                     if (snap.exists()) {
@@ -2404,7 +2417,7 @@
             let arr = [];
             const cache = getViajeCache(currentViajeId);
 
-            if (FIREBASE_AVAILABLE && navigator.onLine) {
+            if (FIREBASE_AVAILABLE && navigator.onLine && !modoBorrador) {
                 try {
                     const snap = await withTimeout(getRef('dias').once('value'));
                     snap.forEach(c => { arr.push({ ...c.val(), id: c.key }); });
@@ -2427,7 +2440,7 @@
             let d = null;
             const cache = getViajeCache(currentViajeId);
 
-            if (FIREBASE_AVAILABLE && navigator.onLine) {
+            if (FIREBASE_AVAILABLE && navigator.onLine && !modoBorrador) {
                 try {
                     const snap = await withTimeout(getRef('dias/' + id).once('value'));
                     if (snap.exists()) { d = snap.val(); d.id = id; }
@@ -2501,7 +2514,7 @@
             if (f) filtroComentarios = f;
             let todos = [];
 
-            if (FIREBASE_AVAILABLE && navigator.onLine) {
+            if (FIREBASE_AVAILABLE && navigator.onLine && !modoBorrador) {
                 try {
                     const snap = await withTimeout(getRef('comentarios').once('value'));
                     snap.forEach(c => { todos.push({ ...c.val(), id: c.key }); });
@@ -2540,7 +2553,7 @@
         async function actualizarBadgeComentarios() {
             if (!currentViajeId) return;
             let todos = getViajeCache(currentViajeId).comentarios || [];
-            if (FIREBASE_AVAILABLE && navigator.onLine) {
+            if (FIREBASE_AVAILABLE && navigator.onLine && !modoBorrador) {
                 try {
                     const snap = await withTimeout(getRef('comentarios').once('value'));
                     todos = [];
@@ -3033,7 +3046,7 @@
             const cache = getViajeCache(currentViajeId);
             let arr = [];
 
-            if (FIREBASE_AVAILABLE && navigator.onLine) {
+            if (FIREBASE_AVAILABLE && navigator.onLine && !modoBorrador) {
                 try {
                     const snap = await withTimeout(getRef('gastos').orderByChild('fecha').once('value'));
                     snap.forEach(c => { arr.push({ ...c.val(), id: c.key }); });
