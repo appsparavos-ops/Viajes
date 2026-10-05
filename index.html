@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Viajes — Bitácora y Panel</title>
+<meta name="description" content="Las dos apps del viaje: la Bitácora para leer el diario y el Panel para trabajar durante el viaje. Se instalan por separado.">
+<!-- Portada del sitio. NO declara manifest ni service worker a propósito: si lo hiciera,
+     sería una tercera app que reclamaría la raíz del sitio y volvería a pisar a las otras
+     dos (es exactamente el bug que se arregló moviendo cada app a su carpeta).
+     Se comprueba automáticamente en herramientas/verificar-manifiestos.js. -->
+<style>
+  :root { color-scheme: dark }
+  * { box-sizing: border-box }
+  body {
+    margin: 0; min-height: 100vh; padding: 28px 20px 40px;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: radial-gradient(1200px 600px at 50% -10%, #1e293b 0%, #0f172a 55%, #0b1220 100%);
+    color: #e2e8f0; display: flex; flex-direction: column; align-items: center;
+  }
+  header { text-align: center; max-width: 720px; margin: 12px 0 26px }
+  .kicker { letter-spacing: .18em; text-transform: uppercase; font-size: 11.5px; color: #94a3b8; margin: 0 0 10px }
+  h1 { font-size: clamp(26px, 5vw, 38px); margin: 0 0 10px; line-height: 1.15 }
+  h1 span { color: #fbbf24 }
+  header p { margin: 0; color: #b6c2d2; font-size: 15px; line-height: 1.55 }
+  main { width: 100%; max-width: 720px; display: grid; gap: 16px }
+  .app {
+    display: block; text-decoration: none; color: inherit; padding: 20px 22px;
+    border-radius: 16px; border: 1px solid #263349; background: #131c2c;
+    transition: transform .15s ease, border-color .15s ease, background .15s ease;
+  }
+  .app:hover { transform: translateY(-2px); border-color: #fbbf24; background: #172234 }
+  .app:focus-visible { outline: 3px solid #fbbf24; outline-offset: 3px }
+  .fila { display: flex; align-items: center; gap: 14px }
+  .emoji { font-size: 30px; line-height: 1 }
+  .app h2 { margin: 0; font-size: 19px }
+  .app small { display: block; color: #94a3b8; font-size: 12.5px; margin-top: 3px; letter-spacing: .04em }
+  .app p { margin: 12px 0 0; color: #b6c2d2; font-size: 14px; line-height: 1.5 }
+  .pastilla {
+    display: inline-block; margin-top: 14px; font-size: 13px; font-weight: 700;
+    color: #0b1220; background: #fbbf24; padding: 8px 14px; border-radius: 9px;
+  }
+  .bitacora .emoji { filter: drop-shadow(0 0 10px rgba(251,191,36,.35)) }
+  footer { margin-top: 28px; max-width: 720px; color: #7c8a9e; font-size: 12.5px; line-height: 1.6; text-align: center }
+  code { color: #cbd5e1; background: #1c2739; padding: 1px 5px; border-radius: 5px; font-size: 12px }
+  @media (prefers-reduced-motion: reduce) { .app { transition: none } }
+</style>
+</head>
+<body>
+  <header>
+    <p class="kicker">Ecosistema Viajes</p>
+    <h1>Bitácora <span>·</span> Panel</h1>
+    <p>Son <strong>dos aplicaciones independientes</strong>: cada una se instala con su propio ícono
+       y su ventana. Instalá la Bitácora en el teléfono de quien sigue el viaje y el Panel en el tuyo.</p>
+  </header>
+
+  <main>
+    <a class="app bitacora" href="bitacora/">
+      <div class="fila">
+        <span class="emoji" aria-hidden="true">📖</span>
+        <span>
+          <h2>Bitácora de Viaje</h2>
+          <small>EL DIARIO, PARA LEER Y COMENTAR</small>
+        </span>
+      </div>
+      <p>Día por día: fotos, relatos, recorrido GPS en vivo y comentarios de quien sigue el viaje.</p>
+      <span class="pastilla">Abrir la Bitácora →</span>
+    </a>
+
+    <a class="app panel" href="panel/">
+      <div class="fila">
+        <span class="emoji" aria-hidden="true">🧳</span>
+        <span>
+          <h2>Panel de Viaje</h2>
+          <small>PARA TRABAJAR DURANTE EL VIAJE</small>
+        </span>
+      </div>
+      <p>Publicar entradas, escanear tickets, presupuesto y gastos, invitar gente: todo desde acá.</p>
+      <span class="pastilla">Abrir el Panel →</span>
+    </a>
+  </main>
+
+  <footer>
+    En cada app, tocá el botón flotante <strong>“Instalar”</strong> (abajo a la derecha) para dejarla
+    como aplicación. En Android y Windows usá Chrome o Edge; en iPhone/iPad, Safari → Compartir ⬆️ →
+    <em>Agregar a pantalla de inicio</em>.<br>
+    Si ya tenías instalada la app vieja, desinstalala una vez y reinstalá:
+    <code>INSTALAR-LAS-DOS-APPS.md</code> explica por qué y cómo.
+  </footer>
+</body>
+</html>

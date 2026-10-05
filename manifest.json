@@ -1,49 +1,87 @@
 {
-  "id": "viajes-panel",
   "name": "Panel de Viaje",
   "short_name": "Panel",
   "description": "Panel del viaje: administración de la bitácora, presupuesto y Ticket Scanner de gastos. Funciona offline y sincroniza.",
   "lang": "es",
   "dir": "ltr",
-  "start_url": "viaje-admin.html?src=pwa",
-  "scope": "./",
+  "start_url": "panel/index.html?src=pwa",
+  "scope": "panel/",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
   "orientation": "any",
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
-  "categories": ["travel", "productivity", "finance"],
+  "categories": [
+    "travel",
+    "productivity",
+    "finance"
+  ],
   "prefer_related_applications": false,
   "icons": [
-    { "src": "icons/panel-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icons/panel-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "icons/panel-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "icons/panel-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/panel-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/panel-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ],
   "screenshots": [
-    { "src": "screenshots/panel-wide.png", "sizes": "1280x720", "type": "image/png", "form_factor": "wide", "label": "Panel de administración del viaje" },
-    { "src": "screenshots/panel-narrow.png", "sizes": "412x915", "type": "image/png", "form_factor": "narrow", "label": "Panel en el teléfono" }
+    {
+      "src": "screenshots/panel-wide.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Panel de administración del viaje"
+    },
+    {
+      "src": "screenshots/panel-narrow.png",
+      "sizes": "412x915",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Panel en el teléfono"
+    }
   ],
   "shortcuts": [
     {
       "name": "Ticket Scanner (cargar gasto)",
       "short_name": "Gasto",
       "description": "Sacar foto a un ticket y guardar el gasto",
-      "url": "scanner.html?src=pwa",
-      "icons": [{ "src": "icons/panel-192.png", "sizes": "192x192", "type": "image/png" }]
+      "url": "panel/scanner.html?src=pwa",
+      "icons": [
+        {
+          "src": "icons/panel-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     },
     {
       "name": "Presupuesto",
       "short_name": "Presupuesto",
       "description": "Ver el presupuesto y las cuentas del viaje",
-      "url": "presupuesto.html?src=pwa",
-      "icons": [{ "src": "icons/panel-192.png", "sizes": "192x192", "type": "image/png" }]
-    },
-    {
-      "name": "Ver bitácora",
-      "short_name": "Bitácora",
-      "description": "Abrir la bitácora como la ven los visitantes",
-      "url": "viaje.html?src=pwa",
-      "icons": [{ "src": "icons/panel-192.png", "sizes": "192x192", "type": "image/png" }]
+      "url": "panel/presupuesto.html?src=pwa",
+      "icons": [
+        {
+          "src": "icons/panel-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ]
 }

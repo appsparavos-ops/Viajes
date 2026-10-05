@@ -2,8 +2,9 @@
  * sw.js — Service Worker unificado del ecosistema Viajes.
  *
  * Sirve a las DOS apps instalables:
- *   • Bitácora  → viaje.html
- *   • Panel     → viaje-admin.html, presupuesto.html, scanner.html
+ *   • Bitácora  → bitacora/index.html  (scope /bitacora/)
+ *   • Panel     → panel/index.html, panel/presupuesto.html, panel/scanner.html
+ *                 (scope /panel/)
  *
  * Estrategias:
  *   • Navegación (HTML): RED PRIMERO, caché como respaldo. Con internet siempre
@@ -25,21 +26,25 @@
  *   3. Si fallaba la red y no había caché, respondía con `undefined` (error de SW).
  *      Ahora devuelve una página de aviso real.
  */
-const VERSION = 'viajes-v2';
+const VERSION = 'viajes-v3';
 const CACHE = VERSION; // nombre de la caché = versión (el limpiador de datos offline la reconoce por el prefijo 'viajes-')
 
 /* Recursos que se guardan en la instalación. Si alguno falla, se anota y sigue. */
 const PRECACHE = [
-  './viaje.html',
-  './viaje-admin.html',
-  './presupuesto.html',
-  './scanner.html',
+  './bitacora/',
+  './bitacora/index.html',
+  './panel/',
+  './panel/index.html',
+  './panel/presupuesto.html',
+  './panel/scanner.html',
   './pwa-install.js',
-  './app.js',
-  './viaje-admin.bundle.js',
+  './panel/app.js',
+  './panel/viaje-admin.bundle.js',
   './firebase-config.js',
   './manifest-bitacora.json',
   './manifest-panel.json',
+  './bitacora/manifest.json',
+  './panel/manifest.json',
   './lib/tailwindcss.js',
   './lib/leaflet.js',
   './lib/leaflet.css',

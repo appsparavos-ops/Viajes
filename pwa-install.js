@@ -2,15 +2,17 @@
  * pwa-install.js — Instalación de las dos apps del ecosistema Viajes.
  *
  * Uso (una sola línea por página):
- *   <script src="pwa-install.js" data-app="bitacora" defer></script>   // viaje.html
- *   <script src="pwa-install.js" data-app="panel"    defer></script>   // viaje-admin / presupuesto / scanner
+ *   <script src="../pwa-install.js" data-app="bitacora" defer></script>   // bitacora/index.html
+ *   <script src="../pwa-install.js" data-app="panel"    defer></script>   // panel/index.html, presupuesto, scanner
  *
  * Qué hace:
- *   1. Registra el service worker (sw.js) — requisito para que la app sea instalable.
+ *   1. Registra el service worker (sw.js, en la raíz del sitio) — requisito para que la
+ *      app sea instalable. Las rutas de abajo se calculan desde la ubicación de ESTE
+ *      archivo, no desde la página: así funciona igual desde /bitacora/ y desde /panel/.
  *   2. Muestra un BOTÓN FLOTANTE "Instalar" en la esquina inferior derecha de la
  *      pantalla, presente en TODAS las páginas de la app:
- *        • viaje.html      → instala la Bitácora
- *        • viaje-admin.html / presupuesto.html / scanner.html → instala el Panel
+ *        • bitacora/index.html            → instala la Bitácora
+ *        • panel/index.html + presupuesto + scanner → instala el Panel
  *   3. Al tocarlo: si el navegador ya ofreció la instalación (Chrome/Edge/Android),
  *      abre el diálogo nativo. Si no (Safari, Firefox, Chrome sin engagement),
  *      despliega los pasos exactos según la plataforma.
@@ -29,9 +31,19 @@
 
   const script = document.currentScript;
   const APP = (script && script.dataset.app) === 'bitacora' ? 'bitacora' : 'panel';
+
+  /* Carpeta donde vive ESTE archivo (la raíz del sitio), no la de la página que lo
+     carga: las dos apps viven en carpetas distintas (/bitacora/ y /panel/) y el service
+     worker y los íconos están en la raíz. Se calcula con script.src para no depender
+     de la profundidad de la página. */
+  const BASE = (function () {
+    try { return new URL('.', script.src).href; }               // http(s)
+    catch (e) { return location.href.replace(/[^/]*([?#].*)?$/, ''); }
+  })();
+
   const CONF = {
-    bitacora: { nombre: 'Bitácora de Viaje', corto: 'Bitácora', color: '#b45309', hover: '#92400e', icono: 'icons/bitacora-192.png' },
-    panel: { nombre: 'Panel de Viaje', corto: 'Panel', color: '#0f172a', hover: '#1e293b', icono: 'icons/panel-192.png' }
+    bitacora: { nombre: 'Bitácora de Viaje', corto: 'Bitácora', color: '#b45309', hover: '#92400e', icono: BASE + 'icons/bitacora-192.png' },
+    panel: { nombre: 'Panel de Viaje', corto: 'Panel', color: '#0f172a', hover: '#1e293b', icono: BASE + 'icons/panel-192.png' }
   }[APP];
   const CLAVE_OCULTO = 'pwa_boton_oculto_' + APP;
 
@@ -104,7 +116,7 @@
       navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister())).catch(() => {});
     } else {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js', { scope: './' })
+        navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE })
           .then(reg => {
             console.info('[PWA] service worker listo para', APP, '→', reg.scope);
             reg.addEventListener('updatefound', () => {
