@@ -4,9 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Ticket Scanner — Gasto Rápido</title>
+
+  <!-- PWA: forma parte de la app instalable "Panel de Viaje" (entra por viaje-admin.html) -->
+  <link rel="manifest" href="manifest-panel.json">
   <meta name="theme-color" content="#b45309">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Panel de Viaje">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="icons/panel-apple-180.png">
+  <meta name="mobile-web-app-capable" content="yes">
 
   <script src="lib/tailwindcss.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -75,17 +81,11 @@
   <!-- Tesseract.js (CDN) -->
   <script src="lib/tesseract.min.js"></script>
 
-  <script>
-    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-      navigator.serviceWorker.register('./sw.js', { scope: '.' })
-        .then(reg => console.info('[TicketScanner] Service Worker registrado:', reg.scope))
-        .catch(err => console.warn('SW error:', err));
-    } else if ('serviceWorker' in navigator && location.protocol === 'file:') {
-      navigator.serviceWorker.getRegistrations().then(regs => {
-        regs.forEach(r => r.unregister());
-      });
-    }
-  </script>
+  <!-- El service worker y el ofrecimiento de instalación los maneja pwa-install.js
+       (abajo, al final del body). Antes esta página registraba sw.js por su cuenta y
+       precacheaba un index.html inexistente: la instalación del SW fallaba y no
+       quedaba nada en caché. -->
+
 </head>
 
 <body class="min-h-screen flex flex-col">
@@ -245,6 +245,9 @@
   <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-ink/95 text-white text-sm font-medium px-5 py-3 rounded-2xl shadow-2xl opacity-0 pointer-events-none transition-opacity duration-300 z-50 max-w-[92vw] text-center" role="status"></div>
 
   <script src="app.js"></script>
+
+  <!-- PWA: integra esta pantalla a la app instalable "Panel de Viaje" -->
+  <script src="pwa-install.js" data-app="panel" defer></script>
 <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a34efcb62cad8bc1',t:'MTc4ODM3ODAzMw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a38aa71cd93cdd2e',t:'MTc4OTAwMzY3Mw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>

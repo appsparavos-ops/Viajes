@@ -4,6 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin — Bitácora de Viaje</title>
+
+    <!-- ===================== App instalable 2: Panel ========================
+         Entrada del Panel de Viaje. Esta app instalable agrupa las tres
+         pantallas de trabajo: Admin, Presupuesto y Ticket Scanner.          -->
+    <link rel="manifest" href="manifest-panel.json">
+    <meta name="theme-color" content="#b45309">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Panel de Viaje">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="apple-touch-icon" href="icons/panel-apple-180.png">
+    <meta name="mobile-web-app-capable" content="yes">
     <script>
 // Silenciar warning de Tailwind CDN (lib/tailwindcss.js es el build CDN local)
 (function(){
@@ -468,6 +479,19 @@
                             <button onclick="guardarPresupuestoEstimado()" class="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-bold">Guardar Metas</button>
                         </div>
 
+                        <div class="bg-white rounded-2xl shadow-sm p-6 border-l-4 border-red-500">
+                            <h2 class="text-lg font-bold mb-2">🧹 Datos offline</h2>
+                            <p class="text-xs text-gray-500 mb-3">
+                                Borra las copias que esta app guarda en el dispositivo para funcionar sin conexión:
+                                viajes, días, recorridos GPS, gastos del Ticket Scanner y la cola de sincronización pendiente.
+                                Útil si algo quedó desincronizado o para liberar espacio. <strong>Los datos guardados en
+                                Firebase no se tocan.</strong>
+                            </p>
+                            <button onclick="abrirLimpiarDatosOffline()" class="w-full py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-sm font-bold transition">
+                                🧹 Limpiar datos offline…
+                            </button>
+                        </div>
+
                         <div class="text-center pt-2">
                             <button onclick="document.getElementById('modal-config-viaje').classList.add('hidden')" class="px-8 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg text-sm font-bold transition">Cerrar Configuración</button>
                         </div>
@@ -619,6 +643,63 @@
         });
     </script>
 
+    <!-- Modal: Limpiar datos offline (confirmación con advertencia) -->
+    <div id="modal-limpiar-offline" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[240] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="limpiar-titulo">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
+            <div class="px-5 py-4 border-b border-red-100 bg-red-50 flex items-center justify-between rounded-t-2xl sticky top-0 z-10">
+                <h3 id="limpiar-titulo" class="font-bold text-red-800">🧹 Limpiar datos offline</h3>
+                <button type="button" onclick="cerrarLimpiarDatosOffline()" class="text-2xl text-red-300 hover:text-red-700 leading-none" aria-label="Cerrar">&times;</button>
+            </div>
+
+            <div class="p-5 space-y-4 text-sm">
+                <p class="text-gray-700">
+                    Se van a borrar las copias que esta app guarda <strong>en este dispositivo</strong> para funcionar sin
+                    conexión. Los datos que ya están guardados en Firebase <strong>no se tocan</strong>, y tampoco se cierra
+                    tu sesión.
+                </p>
+
+                <div id="limpiar-inventario" class="bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-700">
+                    Revisando el dispositivo…
+                </div>
+
+                <div id="limpiar-alerta-pendientes" class="hidden bg-red-50 border border-red-200 text-red-800 rounded-xl p-3 text-xs"></div>
+                <div id="limpiar-alerta-borrador" class="hidden bg-red-50 border border-red-200 text-red-800 rounded-xl p-3 text-xs">
+                    <strong>⚠️ Estás en modo borrador.</strong> Los datos del borrador existen <strong>solo</strong> en este
+                    dispositivo: si los borrás no se pueden recuperar de ningún lado. Al borrarlos, el borrador se cierra y
+                    volvés a la pantalla de inicio de sesión.
+                </div>
+                <div id="limpiar-alerta-offline" class="hidden bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-3 text-xs">
+                    <strong>📴 Estás sin conexión.</strong> Si borrás ahora, la app no va a poder abrirse hasta que vuelvas a
+                    conectarte (los archivos se vuelven a guardar solos cuando haya internet).
+                </div>
+
+                <label class="flex items-start gap-2 text-xs text-gray-600 cursor-pointer">
+                    <input type="checkbox" id="limpiar-incluir-archivos" checked onchange="actualizarInventarioLimpiar()" class="mt-0.5">
+                    <span>Incluir también los archivos de la app guardados para uso sin conexión
+                    (HTML, librerías, íconos). Se vuelven a guardar solos en la próxima visita con internet.</span>
+                </label>
+
+                <div>
+                    <label for="limpiar-confirmacion" class="text-xs font-bold text-gray-700 block mb-1">
+                        Para confirmar, escribí <code class="bg-gray-100 px-1.5 py-0.5 rounded font-mono">BORRAR</code>:
+                    </label>
+                    <input type="text" id="limpiar-confirmacion" autocomplete="off" autocapitalize="off" spellcheck="false"
+                           placeholder="BORRAR"
+                           oninput="validarLimpiarDatosOffline()"
+                           class="w-full border-2 border-gray-200 focus:border-red-400 focus:outline-none rounded-lg px-3 py-2 text-sm">
+                </div>
+            </div>
+
+            <div class="px-5 py-4 border-t border-gray-100 flex flex-wrap gap-2 justify-end bg-gray-50 rounded-b-2xl">
+                <button type="button" onclick="cerrarLimpiarDatosOffline()" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg text-sm font-bold transition">Cancelar</button>
+                <button type="button" id="btn-limpiar-offline" disabled onclick="ejecutarLimpiarDatosOffline()"
+                        class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-bold transition disabled:opacity-40 disabled:cursor-not-allowed">
+                    🧹 Borrar datos offline
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal de invitación: se usa en modo 'modal' y como respaldo cuando la APK
          bloquea la apertura automática de WhatsApp. -->
     <div id="modal-invitar" class="hidden fixed inset-0 z-[220] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -657,21 +738,60 @@
                     <button type="button" onclick="cerrarVistaBitacora()" class="text-2xl text-gray-400 hover:text-gray-800 leading-none">&times;</button>
                 </div>
             </div>
+            <p id="bitacora-aviso-emergente" class="hidden px-4 py-2 text-[11px] font-semibold text-amber-900 bg-amber-100 border-b border-amber-200">
+                ⚠️ El navegador bloqueó la ventana emergente, así que la bitácora se muestra acá embebida. Usá «abrir en pestaña ↗» para verla en pantalla completa.
+            </p>
             <iframe id="iframe-bitacora" src="" class="flex-1 w-full border-0" title="Vista de la bitácora"></iframe>
         </div>
     </div>
     <script>
+        /* ==========================================================================
+           VER BITÁCORA EN VENTANA EMERGENTE
+           --------------------------------------------------------------------------
+           window.open() abre viaje.html en una ventana propia del navegador, que es
+           lo que buscamos por dos motivos:
+             • Mantiene las dos apps separadas: dentro de la app instalada (modo
+               standalone) un link normal a viaje.html navegaría la MISMA ventana y
+               se perdería el panel.
+             • Permite tener la bitácora al lado del admin (o en otro monitor).
+           Si el entorno bloquea las emergentes (algunos WebView/APK), se usa el
+           modal embebido de siempre, avisando por qué.
+           ========================================================================== */
+        let ventanaBitacora = null;
+
         function abrirVistaBitacora(url) {
+            const destino = url || 'viaje.html';
+            try {
+                // Nombre fijo: si la ventana ya está abierta, se reutiliza y se
+                // actualiza la URL (así refleja el usuario/viaje elegido ahora).
+                ventanaBitacora = window.open(
+                    destino,
+                    'ventana_bitacora',
+                    'popup=yes,width=1100,height=860,left=90,top=60,resizable=yes,scrollbars=yes'
+                );
+            } catch (e) {
+                ventanaBitacora = null;
+            }
+            if (ventanaBitacora && !ventanaBitacora.closed) {
+                try { ventanaBitacora.focus(); } catch (e) {}
+                return false;
+            }
+            abrirBitacoraEmbebida(destino, true);
+            return false;
+        }
+
+        function abrirBitacoraEmbebida(destino, avisar) {
             const m = document.getElementById('modal-bitacora');
             const f = document.getElementById('iframe-bitacora');
             const ext = document.getElementById('bitacora-abrir-externo');
-            const destino = url || 'viaje.html';
-            // Siempre se recarga: refleja el usuario/viaje seleccionado en este momento.
-            if (f) f.src = destino;
+            const aviso = document.getElementById('bitacora-aviso-emergente');
+            if (f && f.getAttribute('src') !== destino) f.src = destino;
             if (ext) ext.href = destino;
-            m.classList.remove('hidden');
+            if (aviso) aviso.classList.toggle('hidden', !avisar);
+            if (m) m.classList.remove('hidden');
             document.body.style.overflow = 'hidden';
         }
+
         function cerrarVistaBitacora() {
             document.getElementById('modal-bitacora').classList.add('hidden');
             document.body.style.overflow = '';
@@ -708,5 +828,8 @@ try {
 </script>
 
       <script src="viaje-admin.bundle.js"></script>
+
+      <!-- PWA: registra el service worker y ofrece instalar el Panel (admin + presupuesto + scanner) -->
+      <script src="pwa-install.js" data-app="panel" defer></script>
 </body>
 </html>

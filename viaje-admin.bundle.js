@@ -2009,8 +2009,16 @@
             let viajes = [];
             let viaSource = 'online';
 
+            // 0) Modo borrador: los viajes existen SOLO en este dispositivo. Si no, al
+            //    estar online se consultaba Firebase (/_borrador_local/...), volvía vacío
+            //    y el panel quedaba sin viaje seleccionado aunque hubiera borradores.
+            if (modoBorrador) {
+                viaSource = 'cache';
+                viajes = getCache(CACHE.viajes) || [];
+            }
+
             // 1) Intentar leer de Firebase con timeout
-            if (FIREBASE_AVAILABLE && checkIsOnline()) {
+            if (!modoBorrador && FIREBASE_AVAILABLE && checkIsOnline()) {
                 try {
                     const snap = await withTimeout(db.ref(`${getUserRoot()}/viajes_index`).once('value'));
                     if (snap.exists()) {
@@ -2609,7 +2617,7 @@
             let cfg = cache.configuracion || {};
 
             // Cargar toda la configuración en una sola llamada si estamos online
-            if (FIREBASE_AVAILABLE && checkIsOnline()) {
+            if (FIREBASE_AVAILABLE && checkIsOnline() && !modoBorrador) {
                 try {
                     const snap = await withTimeout(getRef('configuracion').once('value'), 6000);
                     if (snap.exists()) {
@@ -2752,7 +2760,7 @@
             const cache = getViajeCache(currentViajeId);
             let cot = (cache.cotizaciones || {})[fecha] || null;
 
-            if (FIREBASE_AVAILABLE && checkIsOnline()) {
+            if (FIREBASE_AVAILABLE && checkIsOnline() && !modoBorrador) {
                 try {
                     const snap = await withTimeout(getRef('cotizaciones/' + fecha).once('value'));
                     if (snap.exists()) {
@@ -3085,6 +3093,308 @@
                 if (currentGastoEditId === id) resetGastoForm();
                 cargarUltimosGastos();
             }
+        }
+
+        /* ==========================================================================
+           LIMPIAR DATOS OFFLINE  (Configuración del viaje → zona de peligro)
+           --------------------------------------------------------------------------
+           Borra todo lo que la app guarda en el dispositivo para funcionar sin
+           conexión, en las TRES formas de almacenamiento del ecosistema:
+
+             1. localStorage → travelapp_*  (admin, presupuesto, bitácora)
+                               ts_*          (Ticket Scanner)
+             2. IndexedDB    → TicketScannerDB (gastos y cola del scanner)
+             3. CacheStorage → cachés del service worker (prefijo 'viajes-')
+
+           NO toca: la sesión de Firebase, el usuario recordado, las preferencias de
+           UI ni —por supuesto— los datos que ya están en Firebase.
+
+           Flujo: botón → inventario real en pantalla → advertencias según el caso
+           (cola pendiente / modo borrador / sin conexión) → confirmación escrita
+           "BORRAR" → borrado → resumen y recarga.
+           ========================================================================== */
+        const LIMPIAR_PREFIJOS = ['travelapp_', 'ts_'];
+        const LIMPIAR_INTOCABLES = ['travelapp_active_user', 'travelapp_modo_borrador'];
+        const LIMPIAR_CACHE_PREFIJO = 'viajes-';
+        const LIMPIAR_IDB = 'TicketScannerDB';
+
+        function clavesDatosOffline() {
+            const claves = [];
+            try {
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    if (!k || LIMPIAR_INTOCABLES.indexOf(k) !== -1) continue;
+                    if (LIMPIAR_PREFIJOS.some(p => k.indexOf(p) === 0)) claves.push(k);
+                }
+            } catch (e) { /* ignorar */ }
+            return claves;
+        }
+
+        function bytesDeClaves(claves) {
+            let bytes = 0;
+            claves.forEach(k => { try { bytes += (localStorage.getItem(k) || '').length * 2; } catch (e) {} });
+            return bytes;
+        }
+
+        function contarPendientesOffline() {
+            let total = 0;
+            try { if (typeof SyncManager !== 'undefined' && SyncManager.queue) total += SyncManager.queue.length; } catch (e) {}
+            try { if (typeof contarRutasPendientes === 'function') total += (contarRutasPendientes() || 0); } catch (e) {}
+            // Cola propia del Ticket Scanner (ts_<usuario>_sync_queue)
+            clavesDatosOffline().forEach(k => {
+                if (k.indexOf('_sync_queue') <= 0) return;
+                const q = getCache(k);
+                if (Array.isArray(q)) total += q.length;
+            });
+            return total;
+        }
+
+        function contarGastosEnIndexedDB() {
+            return new Promise(resolve => {
+                try {
+                    if (!window.indexedDB) return resolve(null);
+                    const listo = dbs => {
+                        if (!dbs || !dbs.some(d => d && d.name === LIMPIAR_IDB)) return resolve(0);
+                        const req = indexedDB.open(LIMPIAR_IDB);
+                        req.onerror = () => resolve(null);
+                        req.onsuccess = () => {
+                            const db = req.result;
+                            if (!db.objectStoreNames.contains('gastos')) { db.close(); return resolve(0); }
+                            try {
+                                const c = db.transaction('gastos', 'readonly').objectStore('gastos').count();
+                                c.onsuccess = () => { const n = c.result; db.close(); resolve(n); };
+                                c.onerror = () => { db.close(); resolve(null); };
+                            } catch (e) { db.close(); resolve(null); }
+                        };
+                    };
+                    if (typeof indexedDB.databases === 'function') {
+                        indexedDB.databases().then(listo).catch(() => resolve(null));
+                    } else {
+                        resolve(null); // navegador sin soporte: no se puede contar sin arriesgar crear la base
+                    }
+                } catch (e) { resolve(null); }
+            });
+        }
+
+        function infoCachesApp() {
+            if (!('caches' in window)) return Promise.resolve({ caches: 0, archivos: 0, soportado: false });
+            return caches.keys()
+                .then(claves => {
+                    const propias = claves.filter(k => k.indexOf(LIMPIAR_CACHE_PREFIJO) === 0);
+                    return Promise.all(propias.map(k => caches.open(k).then(c => c.keys()).then(l => l.length)))
+                        .then(conteos => ({ caches: propias.length, archivos: conteos.reduce((a, b) => a + b, 0), soportado: true }));
+                })
+                .catch(() => ({ caches: 0, archivos: 0, soportado: false }));
+        }
+
+        async function inventarioDatosOffline(incluirArchivos) {
+            const inv = {
+                claves: 0, kb: 0, viajes: 0, dias: 0, rutas: 0,
+                gastosTs: 0, gastosIdb: null, pendientes: 0, archivos: null, caches: 0
+            };
+            const claves = clavesDatosOffline();
+            inv.claves = claves.length;
+            inv.kb = Math.round(bytesDeClaves(claves) / 1024);
+
+            const fechasRuta = new Set();
+            claves.forEach(k => {
+                const val = getCache(k);
+                if (k.indexOf('_viajes_cache') > 0 && Array.isArray(val)) inv.viajes += val.length;
+                if (k.indexOf('_viajedata_') > 0 && val && typeof val === 'object') {
+                    inv.dias += Array.isArray(val.dias) ? val.dias.length : 0;
+                    if (val.rutas && typeof val.rutas === 'object') Object.keys(val.rutas).forEach(f => fechasRuta.add(f));
+                }
+                if (k.indexOf('_ruta_') > 0 && val && val.fecha) fechasRuta.add(val.fecha);
+                if (k.indexOf('_gastos_') > 0 && Array.isArray(val)) inv.gastosTs += val.length;
+            });
+            inv.rutas = fechasRuta.size;
+            inv.pendientes = contarPendientesOffline();
+            inv.gastosIdb = await contarGastosEnIndexedDB();
+
+            if (incluirArchivos) {
+                const info = await infoCachesApp();
+                inv.archivos = info.archivos;
+                inv.caches = info.caches;
+            } else {
+                const info = await infoCachesApp(); // igual se informa lo que quedará sin borrar
+                inv.archivosPendientesDeConservar = info.archivos;
+            }
+            return inv;
+        }
+
+        function pintarInventarioLimpiar(inv) {
+            const caja = document.getElementById('limpiar-inventario');
+            if (!caja) return;
+            const fila = (etiqueta, valor, alerta) =>
+                `<div class="flex justify-between gap-3"><span class="text-gray-500">${etiqueta}</span>` +
+                `<span class="font-bold ${alerta ? 'text-red-700' : 'text-gray-800'} text-right">${valor}</span></div>`;
+
+            const gastosIdb = inv.gastosIdb == null ? '—' : inv.gastosIdb;
+            const totalGastos = inv.gastosTs + (inv.gastosIdb || 0);
+            const archivos = inv.archivos == null
+                ? `se conservan (${inv.archivosPendientesDeConservar || 0})`
+                : `${inv.archivos} (en ${inv.caches} caché${inv.caches === 1 ? '' : 's'})`;
+
+            caja.innerHTML =
+                fila('Copias de viajes', inv.viajes ? `${inv.viajes} viaje(s) · ${inv.dias} día(s)` : 'ninguna') +
+                fila('Recorridos GPS', inv.rutas ? `${inv.rutas} día(s)` : 'ninguno') +
+                fila('Gastos del Ticket Scanner', totalGastos ? `${totalGastos} (${inv.gastosTs} en caché, ${gastosIdb} en IndexedDB)` : 'ninguno') +
+                fila('Operaciones sin sincronizar', inv.pendientes ? `${inv.pendientes} — se pierden si borrás` : 'ninguna', inv.pendientes > 0) +
+                fila('Archivos de la app sin conexión', archivos) +
+                fila('Espacio aproximado a liberar', `${inv.kb} KB` + (inv.archivos ? '' : ' + archivos de la app'));
+        }
+
+        async function actualizarInventarioLimpiar() {
+            const caja = document.getElementById('limpiar-inventario');
+            const incluir = !!document.getElementById('limpiar-incluir-archivos')?.checked;
+            if (caja) caja.innerHTML = 'Revisando el dispositivo…';
+            const inv = await inventarioDatosOffline(incluir);
+            pintarInventarioLimpiar(inv);
+
+            // Advertencias según el estado real del dispositivo
+            const alertaPend = document.getElementById('limpiar-alerta-pendientes');
+            if (alertaPend) {
+                if (inv.pendientes > 0) {
+                    alertaPend.innerHTML = `<strong>⚠️ Hay ${inv.pendientes} operación(es) sin sincronizar.</strong> Todavía no ` +
+                        `llegaron a Firebase: si borrás los datos offline, <strong>se pierden</strong>. Sincronizá primero ` +
+                        `(botón 🔄 del panel) si querés conservarlas.`;
+                    alertaPend.classList.remove('hidden');
+                } else {
+                    alertaPend.classList.add('hidden');
+                }
+            }
+            const enBorrador = (typeof modoBorrador !== 'undefined' && modoBorrador) || hayModoBorradorActivo();
+            const alertaBorrador = document.getElementById('limpiar-alerta-borrador');
+            if (alertaBorrador) alertaBorrador.classList.toggle('hidden', !enBorrador);
+            const alertaOffline = document.getElementById('limpiar-alerta-offline');
+            if (alertaOffline) alertaOffline.classList.toggle('hidden', !(typeof navigator !== 'undefined' && navigator.onLine === false));
+        }
+
+        async function abrirLimpiarDatosOffline() {
+            const modal = document.getElementById('modal-limpiar-offline');
+            if (!modal) return;
+            const input = document.getElementById('limpiar-confirmacion');
+            if (input) input.value = '';
+            const btn = document.getElementById('btn-limpiar-offline');
+            if (btn) { btn.disabled = true; btn.textContent = '🧹 Borrar datos offline'; }
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            await actualizarInventarioLimpiar();
+            if (input) input.focus();
+        }
+
+        function cerrarLimpiarDatosOffline() {
+            const modal = document.getElementById('modal-limpiar-offline');
+            if (modal) modal.classList.add('hidden');
+            document.body.style.overflow = '';
+        }
+
+        function validarLimpiarDatosOffline() {
+            const input = document.getElementById('limpiar-confirmacion');
+            const btn = document.getElementById('btn-limpiar-offline');
+            if (!input || !btn) return;
+            btn.disabled = input.value.trim().toUpperCase() !== 'BORRAR';
+        }
+
+        function borrarCachesApp() {
+            if (!('caches' in window)) return Promise.resolve(0);
+            return caches.keys()
+                .then(claves => claves.filter(k => k.indexOf(LIMPIAR_CACHE_PREFIJO) === 0))
+                .then(propias => Promise.all(propias.map(k => caches.delete(k))).then(() => propias.length))
+                .catch(() => 0);
+        }
+
+        function borrarBaseIndexedDB(nombre) {
+            return new Promise(resolve => {
+                try {
+                    const req = indexedDB.deleteDatabase(nombre);
+                    let resuelto = false;
+                    // onblocked puede dispararse por una conexión que se está cerrando en
+                    // este mismo instante: NO hay que darlo por fallido, el borrado se
+                    // completa igual cuando esa conexión termina de cerrarse.
+                    const t = setTimeout(() => { if (!resuelto) { resuelto = true; resolve(false); } }, 5000);
+                    req.onsuccess = () => { if (!resuelto) { resuelto = true; clearTimeout(t); resolve(true); } };
+                    req.onerror = () => { if (!resuelto) { resuelto = true; clearTimeout(t); resolve(false); } };
+                } catch (e) { resolve(false); }
+            });
+        }
+
+        function pintarResumenLimpiar(res) {
+            const caja = document.getElementById('limpiar-inventario');
+            if (caja) {
+                caja.innerHTML =
+                    `<div class="font-bold text-emerald-700 mb-1">✅ Listo: se borraron los datos offline</div>` +
+                    `<div class="flex justify-between gap-3"><span>Elementos locales borrados</span><span class="font-bold">${res.claves}</span></div>` +
+                    `<div class="flex justify-between gap-3"><span>Espacio liberado (aprox.)</span><span class="font-bold">${res.kb} KB</span></div>` +
+                    `<div class="flex justify-between gap-3"><span>Gastos del scanner (IndexedDB)</span><span class="font-bold">${res.idb ? 'borrada' : 'sin cambios'}</span></div>` +
+                    `<div class="flex justify-between gap-3"><span>Archivos de la app</span><span class="font-bold">${res.caches ? res.caches + ' caché(s) borrada(s)' : 'conservados'}</span></div>` +
+                    (res.borrador ? `<div class="mt-1 text-amber-800">Se cerró el modo borrador: al recargar se pide iniciar sesión.</div>` : '');
+            }
+            const footer = document.getElementById('btn-limpiar-offline');
+            if (footer) { footer.disabled = true; footer.textContent = 'Borrado ✓'; }
+            const cancelar = document.querySelector('#modal-limpiar-offline button[onclick="cerrarLimpiarDatosOffline()"]');
+            if (cancelar) cancelar.textContent = 'Cerrar';
+            const input = document.getElementById('limpiar-confirmacion');
+            if (input) { input.disabled = true; input.value = ''; }
+            const chk = document.getElementById('limpiar-incluir-archivos');
+            if (chk) chk.disabled = true;
+
+            const online = typeof navigator === 'undefined' || navigator.onLine !== false;
+            const aviso = document.getElementById('limpiar-alerta-offline');
+            if (aviso) {
+                aviso.classList.remove('hidden');
+                aviso.innerHTML = online
+                    ? '♻️ Recargando para volver a bajar los datos desde Firebase…'
+                    : '<strong>📴 Seguís sin conexión.</strong> Cuando recuperes internet, recargá la app (o volvé a abrirla) para que baje los datos de nuevo.';
+            }
+        }
+
+        async function ejecutarLimpiarDatosOffline() {
+            const input = document.getElementById('limpiar-confirmacion');
+            const btn = document.getElementById('btn-limpiar-offline');
+            if (!input || (input.value || '').trim().toUpperCase() !== 'BORRAR') { validarLimpiarDatosOffline(); return; }
+            const incluirArchivos = !!document.getElementById('limpiar-incluir-archivos')?.checked;
+
+            if (btn) { btn.disabled = true; btn.textContent = 'Borrando…'; }
+
+            const res = {
+                claves: 0, kb: 0, idb: false, caches: 0,
+                borrador: (typeof modoBorrador !== 'undefined' && modoBorrador) || hayModoBorradorActivo()
+            };
+
+            // 1) localStorage (travelapp_* y ts_*), conservando sesión y usuario
+            const claves = clavesDatosOffline();
+            res.kb = Math.round(bytesDeClaves(claves) / 1024);
+            res.claves = claves.length;
+            claves.forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
+
+            // 1b) Modo borrador: se cierra, si no quedaría un tablero vacío sin explicación
+            if (res.borrador) {
+                try { localStorage.removeItem(DRAFT_FLAG_KEY); } catch (e) {}
+                try {
+                    if ((localStorage.getItem('travelapp_active_user') || '') === DRAFT_USER) {
+                        localStorage.removeItem('travelapp_active_user');
+                    }
+                } catch (e) {}
+            }
+
+            // 2) IndexedDB del Ticket Scanner
+            const info = await infoCachesApp().catch(() => null);
+            if (info && info.soportado === false) { /* sin caches: nada que borrar */ }
+            const hayIdb = await contarGastosEnIndexedDB().catch(() => null);
+            if (hayIdb !== null) res.idb = await borrarBaseIndexedDB(LIMPIAR_IDB);
+
+            // 3) CacheStorage del service worker (los archivos de la app)
+            if (incluirArchivos) res.caches = await borrarCachesApp();
+
+            // 4) Refrescar estado en memoria y avisar
+            try { if (typeof SyncManager !== 'undefined' && SyncManager.loadQueue) SyncManager.loadQueue(); } catch (e) {}
+            try { if (typeof updateUI === 'function') updateUI(); } catch (e) {}
+            pintarResumenLimpiar(res);
+            toast(`🧹 Datos offline borrados (${res.claves} elementos, ~${res.kb} KB)`);
+
+            const online = typeof navigator === 'undefined' || navigator.onLine !== false;
+            if (online) setTimeout(() => window.location.reload(), 2000);
         }
 
         function toast(m) { const e = document.getElementById('toast'); e.textContent = m; e.classList.remove('hidden'); setTimeout(() => e.classList.add('hidden'), 3000); }

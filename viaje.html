@@ -4,6 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bitácora de Viaje</title>
+
+    <!-- ===================== App instalable 1: Bitácora =====================
+         Esta página es una PWA independiente: se instala sola, con su ícono y
+         su ventana propia, sin arrastrar el admin ni el scanner.            -->
+    <link rel="manifest" href="manifest-bitacora.json">
+    <meta name="theme-color" content="#b45309">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Bitácora">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="apple-touch-icon" href="icons/bitacora-apple-180.png">
+    <meta name="mobile-web-app-capable" content="yes">
     <link rel="icon" href="kia.jpg"
     type="image/jpg">
     <script src="lib/tailwindcss.js"></script>
@@ -83,6 +94,11 @@
     <!-- Aviso: bitacora en modo borrador local (sin cuenta, datos solo en este dispositivo) -->
     <div id="aviso-borrador" class="hidden bg-amber-100 border-b border-amber-300 text-amber-900 text-sm px-4 py-2 text-center">
         🧾 <strong>Borrador local</strong> — esta bitácora todavía no está publicada: los datos están solo en este dispositivo.
+    </div>
+
+    <!-- Aviso: sin conexión, se está mostrando la copia guardada en el dispositivo -->
+    <div id="aviso-offline" class="hidden bg-yellow-100 border-b border-yellow-300 text-yellow-800 text-sm px-4 py-2 text-center">
+        📴 <strong>Sin conexión</strong> — estás viendo la última copia guardada en este dispositivo.
     </div>
 
     <!-- Masthead / Título de la Revista -->
@@ -300,6 +316,65 @@
             const aviso = document.getElementById('aviso-borrador');
             if (aviso) aviso.classList.remove('hidden');
         }
+
+        /* ==========================================================================
+           RESPALDO OFFLINE (caché compartida con el Panel y el Presupuesto)
+           --------------------------------------------------------------------------
+           La bitácora instalada tiene que poder abrirse sin conexión. Se usa EXACTAMENTE
+           la misma caché que escribe viaje-admin.html / presupuesto.html / scanner.html:
+
+             travelapp_<usuario>_viajes_cache          → índice de viajes
+             travelapp_<usuario>_viajedata_<viajeId>   → { dias, comentarios, rutas, … }
+             travelapp_<usuario>_ruta_<viajeId>_<fecha>→ recorrido GPS de cada día
+
+           Así lo que se descargó en una pantalla queda disponible en la otra sin internet.
+           Todas las lecturas llevan TIMEOUT: sin él, el SDK de Firebase espera la red
+           para siempre y la app quedaría girando en "Cargando…".
+           ========================================================================== */
+        const TIMEOUT_LECTURA = 6000;
+        let usandoCopiaGuardada = false;
+
+        function guardarCacheLocal(clave, valor) {
+            try { localStorage.setItem(clave, JSON.stringify(valor)); return true; }
+            catch (e) { return false; }
+        }
+
+        function claveViajedata(id) { return 'travelapp_' + currentUsername + '_viajedata_' + id; }
+        function claveRuta(viajeId, fecha) { return 'travelapp_' + currentUsername + '_ruta_' + encodeURIComponent(String(viajeId || '')) + '_' + fecha; }
+
+        function withTimeoutLocal(promise, ms = TIMEOUT_LECTURA) {
+            let timer;
+            return Promise.race([
+                promise,
+                new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('timeout')), ms); })
+            ]).finally(() => clearTimeout(timer));
+        }
+
+        function marcarCopiaGuardada() {
+            usandoCopiaGuardada = true;
+            const aviso = document.getElementById('aviso-offline');
+            if (aviso && !esBorradorLocal()) aviso.classList.remove('hidden');
+        }
+
+        function marcarDatosFrescos() {
+            if (!usandoCopiaGuardada) return;
+            usandoCopiaGuardada = false;
+            const aviso = document.getElementById('aviso-offline');
+            if (aviso) aviso.classList.add('hidden');
+        }
+
+        // Al volver la conexión se recarga SOLO si se estaba viendo la copia guardada
+        // (así no se interrumpe a quien está leyendo por un microcorte de red).
+        window.addEventListener('online', () => { if (usandoCopiaGuardada) location.reload(); });
+        window.addEventListener('offline', () => marcarCopiaGuardada());
+
+        /* Fusiona datos nuevos dentro de la caché del viaje sin pisar lo demás
+           (el presupuesto y el scanner guardan gastos y configuración en esa misma clave). */
+        function fusionarEnCacheViaje(viajeId, parche) {
+            if (!viajeId) return;
+            const actual = leerCacheLocal(claveViajedata(viajeId)) || {};
+            guardarCacheLocal(claveViajedata(viajeId), Object.assign(actual, parche));
+        }
         
         function getRef(path) {
             return db.ref(`${currentUsername}/viajes_data/${currentViajeId}/${path}`);
@@ -340,10 +415,12 @@
                 return;
             }
 
-            // 1) Leer usuarios registrados de Firebase (/usernames)
+            // 1) Leer usuarios registrados de Firebase (/usernames), con respaldo local
             let usuarios = [];
             try {
-                const snapUsers = await db.ref('usernames').once('value');
+                // Sin red no se espera al timeout: se usa la copia guardada al instante.
+                if (navigator.onLine === false) throw new Error('sin conexión');
+                const snapUsers = await withTimeoutLocal(db.ref('usernames').once('value'));
                 if (snapUsers.exists()) {
                     snapUsers.forEach(child => {
                         const val = child.val();
@@ -354,8 +431,16 @@
                         });
                     });
                 }
+                if (usuarios.length) {
+                    guardarCacheLocal('travelapp_publico_usuarios_cache', usuarios);
+                    marcarDatosFrescos();
+                }
             } catch (e) {
-                console.warn('Error al cargar índice de usuarios:', e);
+                console.warn('Error al cargar índice de usuarios (se usa la copia guardada):', e && e.message);
+                marcarCopiaGuardada();
+                usuarios = leerCacheLocal('travelapp_publico_usuarios_cache') || [];
+                // Sin índice pero con el usuario en la URL: se puede seguir igual.
+                if (!usuarios.length && urlUser) usuarios = [{ username: urlUser, displayName: urlUser }];
             }
 
             // Si hay un usuario en la URL y no figura en la lista descargada, agregarlo
@@ -375,8 +460,13 @@
                 const found = usuarios.find(u => u.username.toLowerCase() === urlUser.toLowerCase());
                 currentUsername = found ? found.username : urlUser;
             } else {
-                currentUsername = usuarios[0].username;
+                // Sin usuario en la URL: se recuerda el último visto (permite abrir la
+                // app instalada sin conexión y caer directo en la bitácora correcta).
+                const ultimo = leerCacheLocal('travelapp_publico_ultimo_usuario');
+                const encontrado = ultimo && usuarios.find(u => u.username === ultimo);
+                currentUsername = encontrado ? ultimo : usuarios[0].username;
             }
+            guardarCacheLocal('travelapp_publico_ultimo_usuario', currentUsername);
 
             // 3) Poblar selector de usuarios
             const userSelector = document.getElementById('select-usuario-publico');
@@ -402,15 +492,21 @@
                     viajes = leerCacheLocal('travelapp_' + DRAFT_USER + '_viajes_cache') || [];
                     if (!Array.isArray(viajes)) viajes = [];
                 } else {
-                    const snap = await db.ref(`${currentUsername}/viajes_index`).once('value');
-                    if (!snap.exists()) {
-                        tripSelector.innerHTML = '<option value="">(Sin viajes registrados)</option>';
-                        document.getElementById('subtitulo').textContent = `Viajes de @${currentUsername}`;
-                        document.getElementById('nav-dias').innerHTML = '';
-                        document.getElementById('main-content').innerHTML = `<p class="text-center text-gray-400 italic py-16 font-serif text-lg">@${currentUsername} aún no tiene viajes publicados.</p>`;
-                        return;
+                    try {
+                        if (navigator.onLine === false) throw new Error('sin conexión');
+                        const snap = await withTimeoutLocal(db.ref(`${currentUsername}/viajes_index`).once('value'));
+                        if (snap.exists()) {
+                            snap.forEach(c => { viajes.push({ ...c.val(), id: c.key }); });
+                            guardarCacheLocal(`travelapp_${currentUsername}_viajes_cache`, viajes);
+                            marcarDatosFrescos();
+                        }
+                    } catch (e) {
+                        // Sin red (o servidor sin responder): última copia guardada.
+                        console.warn('No se pudo leer el índice de viajes:', e && e.message);
+                        marcarCopiaGuardada();
+                        viajes = leerCacheLocal(`travelapp_${currentUsername}_viajes_cache`) || [];
+                        if (!Array.isArray(viajes)) viajes = [];
                     }
-                    snap.forEach(c => { viajes.push({ ...c.val(), id: c.key }); });
                 }
 
                 if (viajes.length === 0) {
@@ -442,7 +538,9 @@
                 cargarRutasViaje();
             } catch (err) {
                 console.error('Error al cargar viajes del usuario:', err);
-                document.getElementById('main-content').innerHTML = '<p class="text-center text-red-500 py-16 font-serif text-lg">Error al conectar con Firebase.</p>';
+                document.getElementById('main-content').innerHTML = usandoCopiaGuardada
+                    ? '<p class="text-center text-amber-700 py-16 font-serif text-lg">📴 Sin conexión y sin copia guardada de esta bitácora.<br><span class="text-base text-gray-500">Conectate una vez para poder leerla después sin internet.</span></p>'
+                    : '<p class="text-center text-red-500 py-16 font-serif text-lg">Error al conectar con Firebase.</p>';
             }
         }
 
@@ -501,8 +599,22 @@
                 arr.sort((a, b) => (a.numero || 0) - (b.numero || 0));
                 arr.forEach(d => dias.push(d));
             } else {
-                const snap = await getRef('dias').orderByChild('numero').once('value');
-                snap.forEach(child => { dias.push({ ...child.val(), id: child.key }); });
+                try {
+                    if (navigator.onLine === false) throw new Error('sin conexión');
+                    const snap = await withTimeoutLocal(getRef('dias').orderByChild('numero').once('value'));
+                    snap.forEach(child => { dias.push({ ...child.val(), id: child.key }); });
+                    // Se guarda en la MISMA caché que usa el panel: si mañana abrís
+                    // esto sin internet, ya está descargado.
+                    fusionarEnCacheViaje(currentViajeId, { dias });
+                    marcarDatosFrescos();
+                } catch (e) {
+                    console.warn('No se pudieron leer los días (se usa la copia guardada):', e && e.message);
+                    marcarCopiaGuardada();
+                    const cache = leerCacheLocal(claveViajedata(currentViajeId)) || {};
+                    const arr = Array.isArray(cache.dias) ? cache.dias.slice() : [];
+                    arr.sort((a, b) => (a.numero || 0) - (b.numero || 0));
+                    arr.forEach(d => dias.push(d));
+                }
             }
             allTripDias = dias;
 
@@ -726,13 +838,27 @@
                 return;
             }
 
-            const snap = await getRef('comentarios').orderByChild('diaId').equalTo(diaId).once('value');
-            
-            const comentarios = [];
-            snap.forEach(c => {
-                const data = c.val();
-                if (data.aprobado) comentarios.push(data);
-            });
+            let comentarios = [];
+            try {
+                if (navigator.onLine === false) throw new Error('sin conexión');
+                const snap = await withTimeoutLocal(getRef('comentarios').orderByChild('diaId').equalTo(diaId).once('value'));
+                snap.forEach(c => {
+                    const data = c.val();
+                    if (data.aprobado) comentarios.push(data);
+                });
+                // Se acumulan en la caché del viaje para poder leerlos sin conexión.
+                const previos = (leerCacheLocal(claveViajedata(currentViajeId)) || {}).comentarios || [];
+                const porId = new Map(previos.map(c => [c.id || (c.diaId + '|' + c.createdAt), c]));
+                comentarios.forEach(c => porId.set(c.id || (c.diaId + '|' + c.createdAt), c));
+                fusionarEnCacheViaje(currentViajeId, { comentarios: [...porId.values()] });
+                marcarDatosFrescos();
+            } catch (e) {
+                marcarCopiaGuardada();
+                const cache = leerCacheLocal(claveViajedata(currentViajeId)) || {};
+                comentarios = (cache.comentarios || []).filter(c => c.aprobado && c.diaId === diaId);
+                const forma = document.getElementById(`form-comentario-${diaId}`);
+                if (forma) forma.classList.add('hidden'); // sin conexión no se puede publicar
+            }
             comentarios.sort((a,b) => (a.createdAt || 0) - (b.createdAt || 0));
 
             if (comentarios.length === 0) {
@@ -870,14 +996,35 @@
                 } catch (e) {}
             } else {
                 try {
-                    const snap = await db.ref(`${currentUsername}/viajes_data/${currentViajeId}/rutas`).once('value');
+                    if (navigator.onLine === false) throw new Error('sin conexión');
+                    const snap = await withTimeoutLocal(db.ref(`${currentUsername}/viajes_data/${currentViajeId}/rutas`).once('value'));
                     if (snap.exists()) {
                         snap.forEach(child => {
                             rutasViajeMap[child.key] = child.val();
+                            // Misma clave que usa el panel (cacheManager.keyRuta).
+                            guardarCacheLocal(claveRuta(currentViajeId, child.key), child.val());
                         });
+                        fusionarEnCacheViaje(currentViajeId, { rutas: rutasViajeMap });
+                        marcarDatosFrescos();
                     }
                 } catch (err) {
-                    console.warn('No se pudieron leer las rutas de Firebase:', err);
+                    console.warn('No se pudieron leer las rutas (se usa la copia guardada):', err && err.message);
+                    marcarCopiaGuardada();
+                    const cache = leerCacheLocal(claveViajedata(currentViajeId)) || {};
+                    if (cache.rutas && typeof cache.rutas === 'object') {
+                        rutasViajeMap = cache.rutas;
+                    } else {
+                        // Compatibilidad: rutas guardadas por clave individual.
+                        try {
+                            for (let i = 0; i < localStorage.length; i++) {
+                                const k = localStorage.key(i);
+                                if (k && k.includes(currentViajeId) && k.includes('_ruta_')) {
+                                    const data = leerCacheLocal(k);
+                                    if (data && data.fecha) rutasViajeMap[data.fecha] = data;
+                                }
+                            }
+                        } catch (e) {}
+                    }
                 }
             }
 
@@ -1388,6 +1535,9 @@
 
         initPublicApp();
     </script>
+
+    <!-- PWA: registra el service worker y ofrece instalar la Bitácora -->
+    <script src="pwa-install.js" data-app="bitacora" defer></script>
 <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
 <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a38aa6751ba4dd2e',t:'MTc4OTAwMzY0Ng=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3997740fb96d841',t:'MTc4OTE1ODk5OQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
 </body>
