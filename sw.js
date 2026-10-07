@@ -26,7 +26,7 @@
  *   3. Si fallaba la red y no había caché, respondía con `undefined` (error de SW).
  *      Ahora devuelve una página de aviso real.
  */
-const VERSION = 'viajes-v3';
+const VERSION = 'viajes-v4';
 const CACHE = VERSION; // nombre de la caché = versión (el limpiador de datos offline la reconoce por el prefijo 'viajes-')
 
 /* Recursos que se guardan en la instalación. Si alguno falla, se anota y sigue. */

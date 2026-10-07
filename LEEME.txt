@@ -1,0 +1,42 @@
+VIAJES — archivos para subir al repositorio
+===========================================
+
+QUÉ CAMBIÓ EN ESTA ENTREGA
+  · El ⚙️ de "Configuración del viaje" se mudó de la pestaña 💵 Finanzas al ENCABEZADO del panel
+    (arriba a la derecha, junto a 🚪): queda siempre a mano, sin entrar a ninguna pestaña.
+    La ventana de configuración también se movió fuera de las pestañas para que abra desde
+    cualquier pantalla. La pestaña Finanzas sigue igual, sólo que ya no lleva el engranaje.
+  · sw.js sube a VERSION 'viajes-v4' (regla del proyecto: subir la versión al publicar cambios).
+  · (Viene incluido todo lo de la entrega anterior: las dos apps en carpetas propias para que
+    se instalen por separado, las redirecciones de las direcciones viejas y la portada nueva.)
+
+QUÉ HAY ACÁ
+  index.html .............. portada: acceso a las dos apps
+  bitacora/ ............... la Bitácora (index + manifest)        ← alcance /bitacora/
+  panel/ .................. el Panel: index, presupuesto, scanner, app.js, bundle y manifest
+                                                                  ← alcance /panel/
+  viaje.html, viaje-admin.html, presupuesto.html, scanner.html
+      .... redirecciones: los enlaces viejos siguen funcionando y conservan ?user= y ?id=
+  manifest-bitacora.json / manifest-panel.json / manifest.json
+      .... manifiestos de la raíz (compatibilidad; no reclaman todo el sitio)
+  sw.js ................... service worker, VERSION 'viajes-v4'
+  pwa-install.js .......... botón flotante "Instalar" + registro del service worker
+  icons/ .................. los 8 íconos de las dos apps (si ya los tenés, son los mismos)
+
+QUÉ HACER
+  1. Copiá todo esto sobre la raíz del repo, respetando las carpetas.
+  2. BORRÁ estos dos archivos viejos de la raíz (ahora viven en panel/):
+         app.js
+         viaje-admin.bundle.js
+  3. git add -A && git commit -m "Configuración del viaje en el encabezado + dos apps en carpetas propias" && git push
+
+  OJO: no hace falta tocar lib/, firebase-config.js, ruta.jpg, kia.jpg ni recortar-timeline.html.
+  Las capturas del diálogo de instalación (screenshots/) ya están en el repo.
+
+DESPUÉS DE PUBLICAR (una sola vez, en cada dispositivo)
+  1. Desinstalá la app vieja "Viaje"/"Bitácora" (la que se instaló desde la raíz).
+     Windows: menú ⋮ dentro de la app → Desinstalar.  Android: mantener presionado → Desinstalar.
+     Si te ofrece borrar datos del sitio, contestá NO.
+  2. Instalá la Bitácora:  https://appsparavos-ops.github.io/Viajes/bitacora/
+  3. Instalá el Panel:     https://appsparavos-ops.github.io/Viajes/panel/
+     Tocá el botón flotante "Instalar" en cada una. Quedan dos apps separadas.
