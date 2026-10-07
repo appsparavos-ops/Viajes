@@ -169,6 +169,10 @@
             <a id="btn-presupuesto-link" href="presupuesto.html" class="icon-btn bg-green-600 hover:bg-green-500" title="Presupuesto" aria-label="Presupuesto" data-label="Presupuesto">💰</a>
             <a id="btn-ver-bitacora" href="../bitacora/index.html" onclick="abrirVistaBitacora(this.href); return false;" class="icon-btn bg-amber-600 hover:bg-amber-500 cursor-pointer" title="Ver bitácora" aria-label="Ver bitácora" data-label="Ver bitácora">👁️</a>
             <button type="button" onclick="invitarAlViaje()" id="btn-invitar" class="icon-btn icon-wa" title="Invitar a seguir el viaje" aria-label="Invitar a seguir el viaje" data-label="Invitar a seguir el viaje"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg></button>
+
+            <!-- Configuración del viaje: antes vivía dentro de la pestaña 💵 Finanzas;
+                 ahora está acá, en el encabezado, siempre a mano (sólo el ícono). -->
+            <button type="button" onclick="abrirModalConfigViaje()" id="btn-config-viaje" class="icon-btn bg-amber-950/70 hover:bg-amber-700" title="Configuración del viaje" aria-label="Configuración del viaje" data-label="Configuración del viaje">⚙️</button>
         </div>
     </header>
 
@@ -420,83 +424,8 @@
         </div>
 
         <div id="tab-finanzas" class="tab-content hidden space-y-6">
-            <div class="flex justify-between items-center bg-white rounded-2xl shadow p-4 border-b-2 border-gray-100">
+            <div class="bg-white rounded-2xl shadow p-4 border-b-2 border-gray-100">
                 <h2 class="text-xl font-bold text-gray-800">Gestión de Gastos</h2>
-                <button onclick="abrirModalConfigViaje()" class="icon-btn bg-gray-100 hover:bg-gray-200 text-gray-700" title="Configuración del viaje" aria-label="Configuración del viaje" data-label="Configuración del viaje">⚙️</button>
-            </div>
-
-            <!-- Modal Configuración del Viaje -->
-            <div id="modal-config-viaje" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4">
-                <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto relative">
-                    <div class="sticky top-0 bg-white border-b border-gray-100 p-4 flex justify-between items-center z-10 rounded-t-2xl">
-                        <h2 class="text-xl font-bold">⚙️ Configuración del Viaje</h2>
-                        <button onclick="document.getElementById('modal-config-viaje').classList.add('hidden')" class="text-2xl text-gray-400 hover:text-gray-700">&times;</button>
-                    </div>
-                    <div class="p-6 space-y-6 bg-gray-50">
-                        <div class="bg-white rounded-2xl shadow-sm p-6 border-l-4 border-gray-400 flex items-center justify-between flex-wrap gap-3">
-                            <div>
-                                <h2 class="text-lg font-bold">🗺️ Estado del Viaje</h2>
-                                <p class="text-xs text-gray-500">Viaje seleccionado: <span id="estado-viaje-titulo" class="font-bold">–</span> &bull; <span id="estado-viaje-badge" class="font-bold text-emerald-600">–</span></p>
-                            </div>
-                            <button onclick="toggleEstadoViaje()" id="btn-toggle-viaje" class="px-5 py-2 rounded-lg text-sm font-bold bg-red-100 text-red-700 hover:bg-red-200 transition">Finalizar Viaje ⛔</button>
-                        </div>
-
-                        <div class="bg-white rounded-2xl shadow-sm p-6 border-l-4 border-purple-500">
-                            <h2 class="text-lg font-bold mb-2">👥 Configuración de Viajeros</h2>
-                            <p class="text-xs text-gray-500 mb-3">Ingresá los nombres separados por coma para poder dividir los gastos.</p>
-                            <div class="flex gap-2">
-                                <input type="text" id="c-viajeros" placeholder="Ej: Arturo, Juan, María" class="flex-1 border rounded-lg px-3 py-2 text-sm">
-                                <button onclick="guardarConfigViajeros()" class="px-6 bg-purple-600 text-white rounded-lg text-sm font-bold">Guardar</button>
-                            </div>
-                        </div>
-
-                        <div class="bg-white rounded-2xl shadow-sm p-6 border-l-4 border-emerald-500">
-                            <h2 class="text-lg font-bold mb-2">💱 Configuración de Monedas</h2>
-                            <p class="text-xs text-gray-500 mb-3">Definí la moneda del país de origen y las monedas a utilizar en el viaje (separadas por comas).</p>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                                <div>
-                                    <label class="text-xs font-bold text-gray-700">Moneda país de origen</label>
-                                    <input type="text" id="c-moneda-origen" placeholder="Ej: UY$" value="UY$" class="w-full border rounded-lg px-3 py-2 text-sm">
-                                </div>
-                                <div>
-                                    <label class="text-xs font-bold text-gray-700">Monedas del viaje (separadas por comas)</label>
-                                    <input type="text" id="c-monedas-gasto" placeholder="Ej: AR$, US$, UY$, CLP" value="AR$, US$, UY$" class="w-full border rounded-lg px-3 py-2 text-sm">
-                                </div>
-                            </div>
-                            <button onclick="guardarConfigMonedas()" class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold">Guardar Configuración de Monedas</button>
-                        </div>
-
-                        <div class="bg-white rounded-2xl shadow-sm p-6 border-l-4 border-amber-500">
-                            <h2 class="text-lg font-bold mb-2">🎯 Presupuesto Estimado (en US$)</h2>
-                            <p class="text-xs text-gray-500 mb-3">Definí metas de gasto para comparar luego con lo real.</p>
-                            <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">
-                                <div><label class="text-xs">Combustible</label><input type="number" id="p-combustible" class="w-full border rounded px-2 py-1 text-sm"></div>
-                                <div><label class="text-xs">Hotelería</label><input type="number" id="p-hoteleria" class="w-full border rounded px-2 py-1 text-sm"></div>
-                                <div><label class="text-xs">Excursiones</label><input type="number" id="p-excursiones" class="w-full border rounded px-2 py-1 text-sm"></div>
-                                <div><label class="text-xs">Alimentación</label><input type="number" id="p-alimentacion" class="w-full border rounded px-2 py-1 text-sm"></div>
-                                <div><label class="text-xs">Otros</label><input type="number" id="p-otros" class="w-full border rounded px-2 py-1 text-sm"></div>
-                            </div>
-                            <button onclick="guardarPresupuestoEstimado()" class="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-bold">Guardar Metas</button>
-                        </div>
-
-                        <div class="bg-white rounded-2xl shadow-sm p-6 border-l-4 border-red-500">
-                            <h2 class="text-lg font-bold mb-2">🧹 Datos offline</h2>
-                            <p class="text-xs text-gray-500 mb-3">
-                                Borra las copias que esta app guarda en el dispositivo para funcionar sin conexión:
-                                viajes, días, recorridos GPS, gastos del Ticket Scanner y la cola de sincronización pendiente.
-                                Útil si algo quedó desincronizado o para liberar espacio. <strong>Los datos guardados en
-                                Firebase no se tocan.</strong>
-                            </p>
-                            <button onclick="abrirLimpiarDatosOffline()" class="w-full py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-sm font-bold transition">
-                                🧹 Limpiar datos offline…
-                            </button>
-                        </div>
-
-                        <div class="text-center pt-2">
-                            <button onclick="document.getElementById('modal-config-viaje').classList.add('hidden')" class="px-8 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg text-sm font-bold transition">Cerrar Configuración</button>
-                        </div>
-                    </div>
-                </div>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -700,8 +629,86 @@
         </div>
     </div>
 
+    <!-- Modal Configuración del Viaje.
+    Vive FUERA de las pestañas: se abre con el ⚙️ del encabezado, así que tiene que
+    poder mostrarse desde cualquier pestaña (dentro de #tab-finanzas quedaba oculto
+    cuando esa pestaña no estaba activa). -->
+
+    <div id="modal-config-viaje" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto relative">
+            <div class="sticky top-0 bg-white border-b border-gray-100 p-4 flex justify-between items-center z-10 rounded-t-2xl">
+                <h2 class="text-xl font-bold">⚙️ Configuración del Viaje</h2>
+                <button onclick="document.getElementById('modal-config-viaje').classList.add('hidden')" class="text-2xl text-gray-400 hover:text-gray-700">&times;</button>
+            </div>
+            <div class="p-6 space-y-6 bg-gray-50">
+                <div class="bg-white rounded-2xl shadow-sm p-6 border-l-4 border-gray-400 flex items-center justify-between flex-wrap gap-3">
+                    <div>
+                        <h2 class="text-lg font-bold">🗺️ Estado del Viaje</h2>
+                        <p class="text-xs text-gray-500">Viaje seleccionado: <span id="estado-viaje-titulo" class="font-bold">–</span> &bull; <span id="estado-viaje-badge" class="font-bold text-emerald-600">–</span></p>
+                    </div>
+                    <button onclick="toggleEstadoViaje()" id="btn-toggle-viaje" class="px-5 py-2 rounded-lg text-sm font-bold bg-red-100 text-red-700 hover:bg-red-200 transition">Finalizar Viaje ⛔</button>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm p-6 border-l-4 border-purple-500">
+                    <h2 class="text-lg font-bold mb-2">👥 Configuración de Viajeros</h2>
+                    <p class="text-xs text-gray-500 mb-3">Ingresá los nombres separados por coma para poder dividir los gastos.</p>
+                    <div class="flex gap-2">
+                        <input type="text" id="c-viajeros" placeholder="Ej: Arturo, Juan, María" class="flex-1 border rounded-lg px-3 py-2 text-sm">
+                        <button onclick="guardarConfigViajeros()" class="px-6 bg-purple-600 text-white rounded-lg text-sm font-bold">Guardar</button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm p-6 border-l-4 border-emerald-500">
+                    <h2 class="text-lg font-bold mb-2">💱 Configuración de Monedas</h2>
+                    <p class="text-xs text-gray-500 mb-3">Definí la moneda del país de origen y las monedas a utilizar en el viaje (separadas por comas).</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                        <div>
+                            <label class="text-xs font-bold text-gray-700">Moneda país de origen</label>
+                            <input type="text" id="c-moneda-origen" placeholder="Ej: UY$" value="UY$" class="w-full border rounded-lg px-3 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-gray-700">Monedas del viaje (separadas por comas)</label>
+                            <input type="text" id="c-monedas-gasto" placeholder="Ej: AR$, US$, UY$, CLP" value="AR$, US$, UY$" class="w-full border rounded-lg px-3 py-2 text-sm">
+                        </div>
+                    </div>
+                    <button onclick="guardarConfigMonedas()" class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold">Guardar Configuración de Monedas</button>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm p-6 border-l-4 border-amber-500">
+                    <h2 class="text-lg font-bold mb-2">🎯 Presupuesto Estimado (en US$)</h2>
+                    <p class="text-xs text-gray-500 mb-3">Definí metas de gasto para comparar luego con lo real.</p>
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">
+                        <div><label class="text-xs">Combustible</label><input type="number" id="p-combustible" class="w-full border rounded px-2 py-1 text-sm"></div>
+                        <div><label class="text-xs">Hotelería</label><input type="number" id="p-hoteleria" class="w-full border rounded px-2 py-1 text-sm"></div>
+                        <div><label class="text-xs">Excursiones</label><input type="number" id="p-excursiones" class="w-full border rounded px-2 py-1 text-sm"></div>
+                        <div><label class="text-xs">Alimentación</label><input type="number" id="p-alimentacion" class="w-full border rounded px-2 py-1 text-sm"></div>
+                        <div><label class="text-xs">Otros</label><input type="number" id="p-otros" class="w-full border rounded px-2 py-1 text-sm"></div>
+                    </div>
+                    <button onclick="guardarPresupuestoEstimado()" class="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-bold">Guardar Metas</button>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm p-6 border-l-4 border-red-500">
+                    <h2 class="text-lg font-bold mb-2">🧹 Datos offline</h2>
+                    <p class="text-xs text-gray-500 mb-3">
+                        Borra las copias que esta app guarda en el dispositivo para funcionar sin conexión:
+                        viajes, días, recorridos GPS, gastos del Ticket Scanner y la cola de sincronización pendiente.
+                        Útil si algo quedó desincronizado o para liberar espacio. <strong>Los datos guardados en
+                            Firebase no se tocan.</strong>
+                    </p>
+                    <button onclick="abrirLimpiarDatosOffline()" class="w-full py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-sm font-bold transition">
+                        🧹 Limpiar datos offline…
+                    </button>
+                </div>
+
+                <div class="text-center pt-2">
+                    <button onclick="document.getElementById('modal-config-viaje').classList.add('hidden')" class="px-8 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg text-sm font-bold transition">Cerrar Configuración</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal de invitación: se usa en modo 'modal' y como respaldo cuando la APK
-         bloquea la apertura automática de WhatsApp. -->
+    bloquea la apertura automática de WhatsApp. -->
     <div id="modal-invitar" class="hidden fixed inset-0 z-[220] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
             <div class="px-5 py-3 text-white flex items-center justify-between" style="background-color:#25D366">
