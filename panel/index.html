@@ -864,6 +864,8 @@ try {
 let dictadoReconocimiento = null;
 let dictadoActivo = false;
 
+let textoAntesDeDictar = "";
+
 function iniciarDictadoSetup() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -878,6 +880,14 @@ function iniciarDictadoSetup() {
 
     recognition.onstart = function() {
         dictadoActivo = true;
+        
+        // Guardamos lo que ya estaba escrito para no duplicarlo si Android envía múltiples eventos
+        const textarea = document.getElementById('f-contenido');
+        textoAntesDeDictar = textarea.value.trim();
+        if (textoAntesDeDictar.length > 0) {
+            textoAntesDeDictar += " "; // un espacio antes de seguir escribiendo
+        }
+
         document.getElementById('txt-dictado').innerText = "Detener";
         document.getElementById('btn-dictado').classList.replace('bg-amber-100', 'bg-red-100');
         document.getElementById('btn-dictado').classList.replace('text-amber-800', 'text-red-800');
@@ -889,7 +899,7 @@ function iniciarDictadoSetup() {
         let interimTranscript = '';
         let finalTranscript = '';
 
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
+        for (let i = 0; i < event.results.length; ++i) {
             if (event.results[i].isFinal) {
                 finalTranscript += event.results[i][0].transcript;
             } else {
@@ -899,7 +909,8 @@ function iniciarDictadoSetup() {
 
         const textarea = document.getElementById('f-contenido');
         if (finalTranscript) {
-            textarea.value = (textarea.value + " " + finalTranscript).trim();
+            // Reconstruimos todo: lo que había + lo nuevo consolidado, esto evita repeticiones
+            textarea.value = textoAntesDeDictar + finalTranscript.trim();
             // Disparar evento input para que otros scripts (si los hay) detecten el cambio
             textarea.dispatchEvent(new Event('input', { bubbles: true }));
         }
