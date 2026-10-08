@@ -40,6 +40,7 @@ const PRECACHE = [
   './pwa-install.js',
   './panel/app.js',
   './panel/viaje-admin.bundle.js',
+  './panel/dictado.js',
   './firebase-config.js',
   './manifest-bitacora.json',
   './manifest-panel.json',
