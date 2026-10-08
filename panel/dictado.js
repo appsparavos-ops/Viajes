@@ -92,6 +92,38 @@
       /[\s.,;:!?…]/.test(frase.charAt(prefijo.length));
   }
 
+  /** Palabra sin puntuación y en minúsculas, para comparar sin que los puntos
+   *  del motor rompan la igualdad. */
+  function normalizarPalabra(p) {
+    return p.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
+  }
+
+  /** CONTRAE los bucles: si el motor repite una y otra vez la misma frase
+   *  («sale el sol sale el sol sale el sol…»), deja una sola ocurrencia más lo
+   *  que venga después. Sin bucle, devuelve el texto igual. */
+  function contraerRepeticion(texto) {
+    const palabras = limpia(texto).split(' ');
+    if (palabras.length < 8) return limpia(texto);
+    const norm = palabras.map(normalizarPalabra);
+    for (let n = 1; n <= 4; n++) {
+      const unidad = norm.slice(0, n);
+      if (unidad.every((p) => !p)) continue;
+      let k = 1;
+      while ((k + 1) * n <= norm.length) {
+        const trozo = norm.slice(k * n, (k + 1) * n);
+        let igual = trozo.length === n;
+        for (let i = 0; igual && i < n; i++) igual = trozo[i] === unidad[i];
+        if (!igual) break;
+        k++;
+      }
+      if (k >= 4) {
+        const resto = palabras.slice(k * n);
+        return unidad.join(' ') + (resto.length ? ' ' + resto.join(' ') : '');
+      }
+    }
+    return limpia(texto);
+  }
+
   /** Reconstruye el texto de una tanda de resultados del motor.
    *
    *  Dos problemas típicos de los navegadores se resuelven acá:
@@ -195,7 +227,7 @@
    *  Se llama al terminar una sesión (corte del motor por silencio, reinicio por
    *  tecleo): así una frase nunca se suma dos veces aunque el motor la reentregue. */
   function confirmarSesion() {
-    const f = limpia(sesionFinales);
+    const f = contraerRepeticion(sesionFinales);   // por si el motor loopeó
     sesionFinales = '';
     sesionProvisorio = '';
     sesionTodo = '';
@@ -356,10 +388,11 @@
     grabando = false;
     clearTimeout(temporizador);
 
-    /* Todo lo que quedó de la sesión se escribe en el relato. */
-    const f = limpia(sesionFinales);
-    const p = limpia(sesionProvisorio);
-    const t = limpia(sesionTodo);
+    /* Todo lo que quedó de la sesión se escribe en el relato (antes se contraen
+       los bucles, por si el motor repitió la misma frase una y otra vez). */
+    const f = contraerRepeticion(sesionFinales);
+    const p = contraerRepeticion(sesionProvisorio);
+    const t = contraerRepeticion(sesionTodo);
     sesionFinales = '';
     sesionProvisorio = '';
     sesionTodo = '';

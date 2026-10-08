@@ -84,11 +84,51 @@
     return false;
   }
 
+  /** Palabra sin puntuación y en minúsculas (los puntos del motor no deben
+   *  romper las comparaciones). */
+  function normalizarPalabra(p) {
+    return p.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
+  }
+
+  /** Clave de un texto para compararlo con otros: sin puntuación, sin mayúsculas
+   *  y con espacios simples. */
+  function claveParaComparar(t) {
+    return limpia(t).toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  /** CONTRAE los bucles del modelo: si el texto es una frase corta repetida una
+   *  y otra vez («sale el sol sale el sol sale el sol…», a veces con un resto al
+   *  final), devuelve UNA sola ocurrencia más lo que venga después. Si no hay
+   *  bucle, devuelve el texto igual. */
+  function contraerRepeticion(texto) {
+    const palabras = limpia(texto).split(' ');
+    if (palabras.length < 8) return limpia(texto);
+    const norm = palabras.map(normalizarPalabra);
+    for (let n = 1; n <= 4; n++) {
+      const unidad = norm.slice(0, n);
+      if (unidad.every((p) => !p)) continue;
+      let k = 1;
+      while ((k + 1) * n <= norm.length) {
+        const trozo = norm.slice(k * n, (k + 1) * n);
+        let igual = trozo.length === n;
+        for (let i = 0; igual && i < n; i++) igual = trozo[i] === unidad[i];
+        if (!igual) break;
+        k++;
+      }
+      if (k >= 4) {
+        const resto = palabras.slice(k * n);
+        return unidad.join(' ') + (resto.length ? ' ' + resto.join(' ') : '');
+      }
+    }
+    return limpia(texto);
+  }
+
   /** Whisper «alucina» frases hechas cuando solo hay ruido: las descartamos. */
   function esAlucinacion(t) {
     const s = limpia(t).toLowerCase();
     if (!s) return true;
     if (esRepeticion(s)) return true;
+    if (/^\[[^\]]{0,40}\][\s.…]*$/.test(s)) return true;   // etiquetas de sonido: «[Música]»
     if (s.length > 80) return false;
     return /^(gracias|thank|subt[ií]tulos|subtitles|por favor,? (suscr|like)|te ha gustado)/i.test(s);
   }
@@ -168,6 +208,15 @@
   let cerrando = false;        // se detuvo y esperamos las últimas transcripciones
   let ultimoResultado = '';    // el último texto aceptado (para no escribirlo dos veces)
 
+  /* Gesto «walkie-talkie»: apretar y hablar, soltar para transcribir.
+     Si soltés enseguida (< TAP_MS), se interpreta como un toque: dictado
+     continuo hasta el próximo toque, como siempre. */
+  const TAP_MS = 300;
+  let pttActivo = false;        // la sesión en curso arrancó por mantener apretado
+  let fuePtt = false;           // ¿la sesión que termina fue de las de apretar?
+  let tBajada = 0;
+  let suprimirClick = false;    // tras apretar/soltar, el click no debe alternar de nuevo
+
   /* ------------------------------------------------------------------ worker */
 
   function asegurarWorker() {
@@ -200,12 +249,17 @@
       revisarCierre();
     } else if (msg.tipo === 'resultado') {
       if (pendientes > 0) pendientes--;
-      const s = limpia(msg.texto).toLowerCase();
-      /* Descartamos alucinaciones y resultados idénticos al anterior (típico
-         artefacto cuando un bloque se corta en el borde de una misma frase). */
-      if (s && s !== ultimoResultado && !esAlucinacion(s)) {
-        ultimoResultado = s;
-        anexar(s);
+      /* Tres defensas contra las frases repetidas:
+         1. contraerRepeticion: si el modelo loopeó («sale el sol sale el sol…»),
+            deja UNA ocurrencia (y lo que venga después, por si es texto real);
+         2. claveParaComparar: si es igual a lo anterior (ignorando puntos y
+            mayúsculas), no se escribe de nuevo;
+         3. esAlucinacion: descarta las frases hechas del modelo con ruido. */
+      const contraido = contraerRepeticion(msg.texto);
+      const clave = claveParaComparar(contraido);
+      if (clave && clave !== ultimoResultado && !esAlucinacion(contraido)) {
+        ultimoResultado = clave;
+        anexar(contraido);
       }
       revisarCierre();
     }
@@ -295,6 +349,27 @@
     if (bloqueLleno || pausaLarga) enviarSegmento();
   }
 
+  /** Saca el silencio del principio y del final de un bloque ya remuestreado:
+   *  el audio «vacío» es de lo que más hace alucinar (y loopear) al modelo. */
+  function recortarSilencios(pcm) {
+    const VENTANA = 320;            // 20 ms a 16 kHz
+    const UMBRAL = 0.008;
+    const rms = (desde) => {
+      let suma = 0;
+      const hasta = Math.min(desde + VENTANA, pcm.length);
+      for (let i = desde; i < hasta; i++) suma += pcm[i] * pcm[i];
+      return Math.sqrt(suma / (hasta - desde || 1));
+    };
+    let inicio = 0, fin = pcm.length;
+    while (inicio + VENTANA <= fin && rms(inicio) < UMBRAL) inicio += VENTANA;
+    while (fin - VENTANA >= inicio && rms(fin - VENTANA) < UMBRAL) fin -= VENTANA;
+    const margen = 2400;            // 150 ms de aire a cada lado
+    inicio = Math.max(0, inicio - margen);
+    fin = Math.min(pcm.length, fin + margen);
+    if (fin - inicio < 1600) return null;   // menos de 0,1 s: no había nada
+    return pcm.slice(inicio, fin);
+  }
+
   /** Junta lo acumulado, lo pasa a 16 kHz y lo manda al worker. */
   async function enviarSegmento() {
     if (!trozos.length) return;
@@ -306,9 +381,11 @@
     silencioMs = 0;
     if (huboVoz < MIN_VOZ_MS) return;          // casi puro silencio: no molestar al modelo
     const pcm16k = await a16k(crudo, contexto ? contexto.sampleRate : 48000);
+    const audible = recortarSilencios(pcm16k);
+    if (!audible) return;                      // al final no había voz suficiente
     if (!worker) return;
     pendientes++;
-    worker.postMessage({ tipo: 'transcribir', id: ++idBloque, audio: pcm16k }, [pcm16k.buffer]);
+    worker.postMessage({ tipo: 'transcribir', id: ++idBloque, audio: audible }, [audible.buffer]);
   }
 
   function concatenar(lista) {
@@ -325,7 +402,9 @@
     if (!cerrando || pendientes > 0) return;
     cerrando = false;
     pintaBotonDictado(false);
-    aviso('Listo: el relato quedó escrito (sin conexión).', '');
+    aviso(fuePtt
+      ? 'Listo: lo que dijiste quedó escrito en el relato.'
+      : 'Listo: el relato quedó escrito (sin conexión).', '');
   }
 
   /* ------------------------------------------------------------------ UI */
@@ -366,15 +445,17 @@
     try { localStorage.setItem(CLAVE_MODO, modoOffline ? 'si' : 'no'); } catch (e) {}
     pintaChip();
     aviso(modoOffline
-      ? 'Dictado sin conexión activado. ' + (modeloListo ? 'El modelo ya está listo.' : 'La primera vez va a descargar el modelo (~77 MB).')
+      ? 'Dictado sin conexión activado. Mantené apretado el botón, hablá y soltá para escribir; o tocá rápido para dictar seguido. '
+        + (modeloListo ? 'El modelo ya está listo.' : 'La primera vez va a descargar el modelo (~77 MB).')
       : 'Dictado online activado (necesita internet).', '');
   });
 
   /* ------------------------------------------------------------------ sesión */
 
-  async function iniciar() {
+  async function iniciar(opts) {
     if (grabando) return;
     const sesion = ++tokenSesion;
+    const eraPtt = !!(opts && opts.ptt);
     pintaBotonDictado(true);
 
     try {
@@ -402,14 +483,22 @@
 
     grabando = true;
     cerrando = false;
+    fuePtt = eraPtt;
     ultimoResultado = '';
-    aviso('Escuchando sin conexión… el texto va apareciendo en tandas mientras hablás.', '');
+    /* Si mientras arrancaba el micrófono ya soltaron el botón, el mensaje
+       tiene que ser el del modo que quedó activo, no el del arranque. */
+    aviso(eraPtt && pttActivo
+      ? 'Escuchando… soltá el botón para escribir lo que dijiste.'
+      : 'Escuchando sin conexión… el texto va apareciendo en tandas mientras hablás.', '');
     textarea.focus();
   }
 
   async function detener() {
-    if (!grabando && !cerrando) return;
+    /* El token cambia SIEMPRE: si hay un iniciar a medio arrancar (por ejemplo,
+       el usuario soltó el botón antes de que el micrófono estuviera listo),
+       el token distinto lo aborta apenas termina de arrancar. */
     tokenSesion++;
+    if (!grabando && !cerrando) return;
     grabando = false;
 
     /* Mandamos lo último que quedó acumulado antes de apagar el micrófono. */
@@ -421,11 +510,16 @@
       aviso('Transcribiendo lo último que dijiste…', '');
     } else {
       pintaBotonDictado(false);
-      aviso('Listo: el relato quedó escrito (sin conexión).', '');
+      aviso(fuePtt
+        ? 'Listo: lo que dijiste quedó escrito en el relato.'
+        : 'Listo: el relato quedó escrito (sin conexión).', '');
     }
   }
 
   function alternar() {
+    /* Si el botón se acaba de usar con apretar/soltar, el click que el
+       navegador dispara al final no tiene que alternar de nuevo. */
+    if (suprimirClick) { suprimirClick = false; return; }
     if (descargando && !grabando) {
       /* Botón apretado en plena descarga del modelo: se cancela el arranque.
          (La descarga en sí sigue: si termina, la próxima vez arranca al toque.) */
@@ -435,6 +529,53 @@
       return;
     }
     grabando || cerrando ? detener() : iniciar();
+  }
+
+  /* -------------------------------------------------- gesto apretar y soltar */
+
+  function cuandoHayaBoton(fn) {
+    const ya = document.getElementById('btn-dictado');
+    if (ya) return fn(ya);
+    const espera = setInterval(() => {
+      const b = document.getElementById('btn-dictado');
+      if (b) { clearInterval(espera); fn(b); }
+    }, 200);
+    setTimeout(() => clearInterval(espera), 5000);
+  }
+
+  cuandoHayaBoton((boton) => {
+    /* Mantener apretado en el celular abre el menú del navegador: no lo queremos. */
+    boton.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    boton.addEventListener('pointerdown', (e) => {
+      /* El walkie-talkie vale solo para el motor sin conexión, con el modelo ya
+         listo y sin otra sesión en curso. El arranque se hace YA (no esperamos a
+         ver si es un toque): así no se pierden las primeras palabras. */
+      if (grabando || cerrando || descargando) return;
+      if (!usarAhora() || !modeloListo) return;
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      tBajada = Date.now();
+      pttActivo = true;
+      iniciar({ ptt: true });
+    });
+  });
+
+  /* El dedo puede soltarse afuera del botón: escuchamos en la ventana. */
+  window.addEventListener('pointerup', soltarBoton);
+  window.addEventListener('pointercancel', soltarBoton);
+
+  function soltarBoton() {
+    if (!pttActivo) return;
+    pttActivo = false;
+    suprimirClick = true;              // el click de después no debe alternar
+    const duracion = Date.now() - tBajada;
+    if (duracion < TAP_MS) {
+      /* Toque corto: queda andando el dictado continuo, como siempre. */
+      if (grabando) aviso('Escuchando sin conexión… el texto va apareciendo en tandas mientras hablás.', '');
+      return;
+    }
+    /* Apretado un rato: transcribimos todo lo dicho y lo dejamos escrito. */
+    detener();
   }
 
   /* ------------------------------------------------------------------ integración */
@@ -470,6 +611,6 @@
     estaGrabando: () => grabando,
     modeloListo: () => modeloListo,
     modoOffline: () => modoOffline,
-    _pruebas: { preparaFrase, calcularRMS, esAlucinacion, esRepeticion },
+    _pruebas: { preparaFrase, calcularRMS, esAlucinacion, esRepeticion, contraerRepeticion, claveParaComparar },
   };
 })();

@@ -104,8 +104,13 @@ async function procesar(msg) {
     const salida = await transcriptor(msg.audio, {
       language: 'spanish',     // forzamos español: es más rápido y no se confunde
       task: 'transcribe',
-      chunk_length_s: 30,
+      chunk_length_s: 15,
       skip_special_tokens: true,
+      /* Anti-bucle: de tanto en tanto Whisper «patina» y repite la misma frase
+         una y otra vez («sale el sol sale el sol sale el sol…»). Con esto, un
+         grupo de 3 palabras no puede aparecer dos veces en el mismo bloque y el
+         bucle se corta de raíz. */
+      no_repeat_ngram_size: 3,
     });
     self.postMessage({ tipo: 'resultado', id: msg.id, texto: (salida && salida.text) || '' });
   }
