@@ -700,6 +700,19 @@
                     </button>
                 </div>
 
+                <div class="bg-white rounded-2xl shadow-sm p-6 border-l-4 border-sky-500">
+                    <h2 class="text-lg font-bold mb-2">🔄 Actualizaciones de la app</h2>
+                    <p class="text-xs text-gray-500 mb-3">
+                        La app se actualiza sola: cada vez que la abrís (o volvés a ella) busca cambios en la web
+                        y, si hay algo nuevo, se recarga sola. Nunca te va a interrumpir si estás escribiendo:
+                        en ese caso te avisa con un cartel.
+                    </p>
+                    <button onclick="buscarActualizacionDeLaApp(true)" class="w-full py-2 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-lg text-sm font-bold transition">
+                        🔄 Buscar actualización ahora
+                    </button>
+                    <p id="estado-actualizacion" class="text-xs text-gray-400 mt-2 text-center">—</p>
+                </div>
+
                 <div class="text-center pt-2">
                     <button onclick="document.getElementById('modal-config-viaje').classList.add('hidden')" class="px-8 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg text-sm font-bold transition">Cerrar Configuración</button>
                 </div>

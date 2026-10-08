@@ -22,9 +22,11 @@
  *      window.mostrarBotonInstalar() o borrando esa clave.
  *
  * API disponible en la página:
- *   window.instalarPWA()          → dispara la instalación (o muestra los pasos)
- *   window.mostrarBotonInstalar() → vuelve a mostrar el botón flotante
- *   window.ocultarBotonInstalar() → lo esconde (no permanente)
+ *   window.instalarPWA()                 → dispara la instalación (o muestra los pasos)
+ *   window.mostrarBotonInstalar()        → vuelve a mostrar el botón flotante
+ *   window.ocultarBotonInstalar()        → lo esconde (no permanente)
+ *   window.buscarActualizacionDeLaApp(t) → busca actualizaciones ya (botón del Panel)
+ *   window.ViajesActualizacion.buscar()  → lo mismo, con API más prolija
  */
 (function () {
   'use strict';
@@ -110,29 +112,251 @@
   }
 
   /* ---------------------------------------------------------- 1) service worker */
+  /* ------------------------------------------- 1) service worker + AUTO-ACTUALIZACIÓN
+   *
+   * La app descargada se actualiza sola, sin que el usuario haga nada:
+   *   a) Al abrir la página (y al volver a ella: cambiar de pestaña, desbloquear el
+   *      teléfono, abrir la app instalada desde el ícono) se le pregunta al service
+   *      worker si hay archivos nuevos en la web.
+   *   b) Si hay algo nuevo, el service worker baja la versión nueva a la caché y
+   *      avisa; acá se muestra «Actualizando…» y se recarga UNA vez, sola.
+   *   c) Si además cambió sw.js, el navegador instala el nuevo y, al activarse,
+   *      también se recarga sola (una sola vez).
+   * Guardas anti-bucle: nunca se recarga dos veces seguidas por actualización en menos
+   * de 15 s, ni se recarga si no hay cambios. Sin internet no se toca nada.
+   */
+  const CLAVE_RECARGA = 'travelapp_recarga_por_actualizacion';
+  const CLAVE_DESCARTADA = 'travelapp_actualizacion_pospuesta';
+  const CLAVE_CUENTA = 'travelapp_recargas_por_actualizacion';
+  const MAX_RECARGAS_SESION = 5;      // tope de recargas automáticas por sesión (anti-bucle)
+  let registroSW = null;
+  let ultimoChequeo = 0;
+  let pendienteAviso = false;
+  let recargando = false;
+
+  function mostrarAviso(texto) {
+    if (typeof window.toast === 'function') { try { window.toast(texto); return; } catch (e) {} }
+    try {
+      let av = document.getElementById('pwa-aviso-actualizacion');
+      if (!av) {
+        av = document.createElement('div');
+        av.id = 'pwa-aviso-actualizacion';
+        av.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);' +
+          'bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:160;background:#1c1917;color:#fff;' +
+          'padding:10px 18px;border-radius:999px;font:600 13px/1.2 system-ui,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25)';
+        document.body.appendChild(av);
+      }
+      av.textContent = texto;
+      av.style.display = 'block';
+      clearTimeout(av._t);
+      av._t = setTimeout(() => { av.style.display = 'none'; }, 4000);
+    } catch (e) {}
+  }
+
+  /** ¿El usuario tiene algo a medio escribir? (para no recargar y borrarle el texto) */
+  function hayTrabajoSinGuardar() {
+    try {
+      const campos = document.querySelectorAll('textarea, input[type="text"], input[type="number"]');
+      for (const el of campos) {
+        if (el.readOnly || el.disabled || el.offsetParent === null) continue;   // solo campos visibles
+        /* Solo cuenta si el valor CAMBIÓ respecto del que traía la página: así los campos
+           precargados (moneda UY$, monedas del viaje…) no bloquean la actualización. */
+        const valor = String(el.value || '');
+        if (valor !== String(el.defaultValue === undefined ? '' : el.defaultValue) && valor.trim().length > 3) return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  /** Cartel discreto: hay versión nueva pero no recargamos para no interrumpir. */
+  function mostrarCartelActualizacion(motivo) {
+    try {
+      if (document.getElementById('pwa-cartel-actualizacion')) return;
+      const c = document.createElement('div');
+      c.id = 'pwa-cartel-actualizacion';
+      c.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);' +
+        'bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:165;display:flex;align-items:center;gap:10px;' +
+        'background:#1c1917;color:#fff;padding:10px 14px;border-radius:999px;box-shadow:0 6px 20px rgba(0,0,0,.3);' +
+        'font:600 13px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:92vw';
+      c.innerHTML = '<span>✨ Hay una versión nueva de la app</span>';
+      const bSi = document.createElement('button');
+      bSi.type = 'button';
+      bSi.textContent = 'Actualizar';
+      bSi.style.cssText = 'border:0;border-radius:999px;padding:6px 12px;background:#f59e0b;color:#fff;font:700 13px system-ui;cursor:pointer';
+      bSi.onclick = () => aplicarRecarga(motivo || 'a pedido');
+      const bNo = document.createElement('button');
+      bNo.type = 'button';
+      bNo.textContent = 'Después';
+      bNo.style.cssText = 'border:0;background:transparent;color:#d6d3d1;font:600 13px system-ui;cursor:pointer';
+      bNo.onclick = () => {
+        try { sessionStorage.setItem(CLAVE_DESCARTADA, '1'); } catch (e) {}
+        c.remove();
+      };
+      c.appendChild(bSi); c.appendChild(bNo);
+      document.body.appendChild(c);
+    } catch (e) {}
+  }
+
+  function aplicarRecarga(motivo) {
+    if (recargando) return false;
+    recargando = true;
+    try {
+      sessionStorage.setItem(CLAVE_RECARGA, String(Date.now()));
+      sessionStorage.setItem(CLAVE_CUENTA, String((Number(sessionStorage.getItem(CLAVE_CUENTA)) || 0) + 1));
+    } catch (e) {}
+    console.info('[PWA] aplicando actualización (' + motivo + ') y recargando…');
+    mostrarAviso('Actualizando la app…');
+    setTimeout(() => { try { location.reload(); } catch (e) {} }, 450);
+    return true;
+  }
+
+  /**
+   * Decide qué hacer cuando se detectó una versión nueva:
+   *   · Si estás escribiendo algo (relato, gasto…) o ya dijiste «Después»: cartel, sin tocar nada.
+   *   · Si no: recarga sola, una sola vez (con guarda de 15 s para no entrar en bucle).
+   */
+  function recargarUnaVez(motivo) {
+    if (recargando) return false;
+    let ultima = 0, descartada = false, cuenta = 0;
+    try {
+      ultima = Number(sessionStorage.getItem(CLAVE_RECARGA)) || 0;
+      descartada = sessionStorage.getItem(CLAVE_DESCARTADA) === '1';
+      cuenta = Number(sessionStorage.getItem(CLAVE_CUENTA)) || 0;
+    } catch (e) {}
+
+    if (descartada) { console.info('[PWA] actualización pospuesta por el usuario'); return false; }
+
+    /* 1º: si estás escribiendo algo, NUNCA se recarga (podrías perder el texto):
+       se avisa con un cartel y la decisión es tuya. */
+    if (hayTrabajoSinGuardar()) {
+      console.info('[PWA] hay texto sin guardar: no se recarga, se avisa con un cartel');
+      mostrarCartelActualizacion(motivo);
+      return false;
+    }
+
+    /* 2º: guardas anti-bucle — no encadenar recargas ni pasarse del tope por sesión. */
+    if (Date.now() - ultima < 5000) {
+      console.info('[PWA] hubo una recarga hace instantes; no se repite por ahora:', motivo);
+      return false;
+    }
+    if (cuenta >= MAX_RECARGAS_SESION) {
+      console.info('[PWA] ya se aplicaron ' + cuenta + ' actualizaciones en esta sesión; no se recarga más solo');
+      return false;
+    }
+    return aplicarRecarga(motivo);
+  }
+
+  function pintarEstadoActualizacion(extra) {
+    const el = document.getElementById('estado-actualizacion');
+    if (!el) return;
+    el.textContent = extra || 'La app se actualiza sola al abrirla.';
+  }
+
+  /** Pregunta si hay cambios. forzar=true salta el intervalo mínimo (botón manual). */
+  function buscarActualizacion(forzar, avisarSiNoHay) {
+    if (!('serviceWorker' in navigator) || location.protocol === 'file:') return Promise.resolve(false);
+    if (!forzar && Date.now() - ultimoChequeo < 60000) return Promise.resolve(false);   // como máximo 1 vez por minuto
+    ultimoChequeo = Date.now();
+    if (avisarSiNoHay) pendienteAviso = true;
+
+    if (!forzar) {
+      // Sin apuro: dejamos que el SW compare huellas (y de paso vea si cambió sw.js).
+      try {
+        const c = navigator.serviceWorker.controller;
+        if (c) { c.postMessage({ tipo: 'buscar-cambios' }); return Promise.resolve(true); }
+      } catch (e) {}
+    }
+    const tareas = [];
+    if (registroSW) tareas.push(registroSW.update().catch(() => {}));   // ¿hay sw.js nuevo?
+    tareas.push(Promise.resolve().then(() => {
+      const c = navigator.serviceWorker.controller;
+      if (c) c.postMessage({ tipo: 'buscar-cambios' });
+    }));
+    return Promise.all(tareas).then(() => true, () => false);
+  }
+
   if ('serviceWorker' in navigator) {
     if (location.protocol === 'file:') {
       // En file:// el SW no aplica y además estorba: se desregistra cualquier resto.
       navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister())).catch(() => {});
     } else {
+      const huboControladorPrevio = !!navigator.serviceWorker.controller;
+
+      navigator.serviceWorker.addEventListener('message', ev => {
+        const d = ev.data || {};
+        if (d.tipo === 'contenido-nuevo') {
+          recargarUnaVez('archivos nuevos en la web');
+        } else if (d.tipo === 'al-dia') {
+          if (pendienteAviso) {
+            pendienteAviso = false;
+            mostrarAviso('Ya tenés la última versión (' + (d.version || '') + ')');
+          }
+          pintarEstadoActualizacion('Todo al día · ' + (d.version || ''));
+        } else if (d.tipo === 'actualizado') {
+          pintarEstadoActualizacion('Se encontraron cambios…');
+        } else if (d.tipo === 'version') {
+          pintarEstadoActualizacion('Última versión: ' + (d.version || '?'));
+        } else if (d.tipo === 'sin-conexion') {
+          if (pendienteAviso) { pendienteAviso = false; mostrarAviso('Sin conexión: no se pudo buscar actualizaciones'); }
+        }
+      });
+
+      /* Cuando el navegador reemplaza el service worker (sw.js cambió), se activa al
+         instante y esta recarga deja todo coherente. Solo si YA había uno: en la
+         primera instalación no se recarga (no hace falta). */
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (huboControladorPrevio) recargarUnaVez('service worker actualizado');
+      });
+
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE })
+        navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE, updateViaCache: 'none' })
           .then(reg => {
+            registroSW = reg;
             console.info('[PWA] service worker listo para', APP, '→', reg.scope);
             reg.addEventListener('updatefound', () => {
               const nuevo = reg.installing;
               if (!nuevo) return;
               nuevo.addEventListener('statechange', () => {
                 if (nuevo.state === 'installed' && navigator.serviceWorker.controller) {
-                  console.info('[PWA] actualización descargada — se aplicará al reabrir');
+                  console.info('[PWA] actualización del service worker descargada');
                 }
               });
             });
+            // Primera búsqueda de cambios al abrir la app (sin avisar si no hay nada).
+            buscarActualizacion(false);
+            pintarEstadoActualizacion();
           })
           .catch(err => console.warn('[PWA] no se pudo registrar el service worker:', err));
       });
+
+      /* Al volver a la app (cambiar de pestaña, desbloquear, abrirla desde el ícono)
+         se revisa de nuevo: si hubo cambios mientras estaba en segundo plano, se
+         recarga sola. */
+      const alVolver = () => { if (document.visibilityState === 'visible') buscarActualizacion(false); };
+      document.addEventListener('visibilitychange', alVolver);
+      window.addEventListener('focus', alVolver);
+      window.addEventListener('online', () => buscarActualizacion(false));
+
+      /* Y si la app queda abierta mucho rato, cada 10 minutos se revisa sola
+         (siempre con la guarda de «no recargar si estás escribiendo»). */
+      setInterval(() => { if (document.visibilityState === 'visible') buscarActualizacion(false); }, 10 * 60 * 1000);
     }
   }
+
+  /* API para la página (y para las pruebas). */
+  window.ViajesActualizacion = {
+    buscar: avisar => buscarActualizacion(true, !!avisar),
+    recargar: motivo => recargarUnaVez(motivo || 'manual'),
+    hayTrabajoSinGuardar: hayTrabajoSinGuardar
+  };
+  // Nombre "en criollo" que usa el botón de Configuración del Panel.
+  window.buscarActualizacionDeLaApp = function (avisar) {
+    if (avisar) { pendienteAviso = true; mostrarAviso('Buscando actualizaciones…'); }
+    return buscarActualizacion(true, !!avisar).then(() => {
+      const c = navigator.serviceWorker && navigator.serviceWorker.controller;
+      if (c) c.postMessage({ tipo: 'version' });
+    });
+  };
 
   /* ----------------------------------------------- 2) botón flotante (FAB) */
   let fab = null;
