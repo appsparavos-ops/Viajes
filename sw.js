@@ -49,16 +49,6 @@ const PRECACHE = [
   './pwa-install.js',
   './panel/app.js',
   './panel/viaje-admin.bundle.js',
-  './panel/dictado.js',
-  './panel/dictado-offline.js',
-  './panel/dictado-offline-worker.js',
-  './panel/dictado-offline-worklet.js',
-  './lib/transformers.js',
-  /* Nota: el binario de ONNX (lib/ort/*.wasm, ~21 MB) y el modelo de Whisper
-     (~77 MB, viene de huggingface.co) NO se precachean acá: pesarían mucho en
-     la instalación. Se cachean solos al usarlos por primera vez — el wasm por
-     la regla de estáticos del mismo origen, y el modelo por la regla de
-     terceros (caché primero). Con eso después funcionan 100 % sin internet. */
   './firebase-config.js',
   './manifest-bitacora.json',
   './manifest-panel.json',
@@ -240,9 +230,7 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     const claves = await caches.keys();
-    /* 'transformers-cache' guarda el modelo del dictado sin conexión (~77 MB):
-       NO se borra al actualizar el SW, para no obligar a descargarlo de nuevo. */
-    await Promise.all(claves.map(k => ((k !== CACHE && !k.startsWith('transformers')) ? caches.delete(k) : null)));
+    await Promise.all(claves.map(k => (k !== CACHE ? caches.delete(k) : null)));
     await self.clients.claim();
     console.info(`[SW ${VERSION}] activo — cachés viejas eliminadas`);
     /* Primera pasada de huellas (sin avisar: es la foto inicial). */
