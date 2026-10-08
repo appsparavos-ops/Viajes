@@ -906,10 +906,41 @@ function iniciarDictadoSetup() {
         
         // Si hay un resultado final en esta corta sesión, lo agregamos al textarea
         if (finalTranscript) {
-            // Agregamos un espacio inteligente si ya hay texto
-            let currentVal = textarea.value.trim();
-            let separator = (currentVal.length > 0 && !currentVal.endsWith('.') && !currentVal.endsWith(',')) ? ' ' : (currentVal.length > 0 ? ' ' : '');
-            textarea.value = currentVal + separator + finalTranscript.trim();
+            let rawVal = textarea.value;
+            let textoLimpio = finalTranscript.trim();
+            
+            // Eliminar espacios sueltos antes de signos de puntuación, ej: "hola ," -> "hola,"
+            textoLimpio = textoLimpio.replace(/\s+([.,!?:;])/g, '$1');
+            
+            let separator = '';
+            // Si hay texto previo y no termina en espacio ni en salto de línea, ponemos separador
+            if (rawVal.length > 0 && !/[\s\n]$/.test(rawVal)) {
+                // Si el nuevo texto arranca con puntuación, se pega a la última palabra
+                if (!/^[.,!?:;]/.test(textoLimpio)) {
+                    separator = ' ';
+                }
+            }
+
+            // Ajuste de mayúsculas y minúsculas
+            // Consideramos inicio de oración si está vacío, o si termina en punto, exclamación, interrogación o salto de línea (ignorando espacios finales)
+            let esInicioOracion = rawVal.trim().length === 0 || /[.!?\n]\s*$/.test(rawVal);
+            
+            // Buscar la primera letra real para capitalizarla (ignorando signos como ¿ o ¡ al inicio)
+            let primeraLetraRegex = /^([^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ]*)([a-zA-ZáéíóúÁÉÍÓÚñÑüÜ])/;
+            
+            if (esInicioOracion) {
+                textoLimpio = textoLimpio.replace(primeraLetraRegex, function(match, prefijo, letra) {
+                    return prefijo + letra.toUpperCase();
+                });
+            } else {
+                // Como desactivamos 'continuous', el motor cree que cada frase es una oración nueva
+                // y la arranca con mayúscula. Si no es inicio de oración, forzamos minúscula.
+                textoLimpio = textoLimpio.replace(primeraLetraRegex, function(match, prefijo, letra) {
+                    return prefijo + letra.toLowerCase();
+                });
+            }
+
+            textarea.value = rawVal + separator + textoLimpio;
             textarea.dispatchEvent(new Event('input', { bubbles: true }));
         }
         
