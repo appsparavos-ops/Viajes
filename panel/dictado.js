@@ -380,7 +380,16 @@
     if (yaEstaba && !(opciones && opciones.silencio)) aviso('Dictado detenido. El texto quedó escrito en el relato.');
   }
 
-  function alternar() { grabando ? detener() : iniciar(); }
+  function alternar() {
+    /* Si está cargado el motor sin conexión (dictado-offline.js) y corresponde
+       usarlo (el usuario lo eligió, o no hay red y el modelo ya está bajado),
+       le delegamos el botón. */
+    if (window.DictadoOffline && window.DictadoOffline.usarAhora()) {
+      window.DictadoOffline.alternar();
+      return;
+    }
+    grabando ? detener() : iniciar();
+  }
 
   boton.addEventListener('click', alternar);
 
