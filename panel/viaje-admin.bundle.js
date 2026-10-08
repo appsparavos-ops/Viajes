@@ -2204,7 +2204,7 @@
         let currentEditId = null;
 
         function switchTab(id) {
-            ['tab-nueva','tab-entradas','tab-comentarios','tab-ruta','tab-finanzas','tab-configuracion'].forEach(tab => {
+            ['tab-nueva','tab-entradas','tab-comentarios','tab-ruta','tab-finanzas'].forEach(tab => {
                 document.getElementById(tab).classList.toggle('hidden', tab !== id);
                 document.getElementById('btn-' + tab.split('-')[1]).classList.toggle('active', tab === id);
                 document.getElementById('btn-' + tab.split('-')[1]).classList.toggle('bg-white', tab !== id);
@@ -2213,7 +2213,6 @@
             if (id === 'tab-comentarios') cargarComentarios();
             if (id === 'tab-ruta') initRutasUI();
             if (id === 'tab-finanzas') initFinanzas();
-            if (id === 'tab-configuracion') cargarConfiguracionViaje();
         }
 
         /* ---- Subida a Cloudinary con compresión previa en el navegador ----
@@ -2576,16 +2575,14 @@
         let cotizacionesTarjetaMemoria = {};
         let esMontoUSManual = false;
 
-        function abrirConfiguracionViaje() {
+        function abrirModalConfigViaje() {
             if (!currentViajeId) {
                 toast('Error: Seleccioná o creá un viaje primero');
                 return;
             }
-            switchTab('tab-configuracion');
-        }
+            const modal = document.getElementById('modal-config-viaje');
+            if (!modal) return;
 
-        function cargarConfiguracionViaje() {
-            if (!currentViajeId) return;
             const cache = getViajeCache(currentViajeId);
             const cfg = cache.configuracion || {};
 
@@ -2619,6 +2616,8 @@
             document.getElementById('p-excursiones').value = pres.Excursiones != null ? pres.Excursiones : '';
             document.getElementById('p-alimentacion').value = pres.Alimentacion != null ? pres.Alimentacion : '';
             document.getElementById('p-otros').value = pres.Otros != null ? pres.Otros : '';
+
+            modal.classList.remove('hidden');
         }
 
         async function initFinanzas() {
