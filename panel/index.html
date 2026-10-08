@@ -863,7 +863,6 @@ try {
 // Lógica para el motor de dictado por voz (offline si el OS lo soporta)
 let dictadoReconocimiento = null;
 let dictadoActivo = false;
-
 let textoAntesDeDictar = "";
 
 function iniciarDictadoSetup() {
@@ -874,20 +873,16 @@ function iniciarDictadoSetup() {
     }
     
     const recognition = new SpeechRecognition();
-    recognition.lang = 'es-ES'; // O es-AR según prefieras
-    recognition.continuous = true;
-    recognition.interimResults = true; // Para mostrar lo que va escuchando
+    recognition.lang = 'es-ES'; // O es-AR
+    
+    // TRUCO PARA ANDROID: No usamos continuous=true porque el motor offline 
+    // de Chrome tiene un bug donde duplica las frases o acumula la historia.
+    // Usamos continuous=false y lo reiniciamos manualmente en el onend.
+    recognition.continuous = false;
+    recognition.interimResults = true; 
 
     recognition.onstart = function() {
         dictadoActivo = true;
-        
-        // Guardamos lo que ya estaba escrito para no duplicarlo si Android envía múltiples eventos
-        const textarea = document.getElementById('f-contenido');
-        textoAntesDeDictar = textarea.value.trim();
-        if (textoAntesDeDictar.length > 0) {
-            textoAntesDeDictar += " "; // un espacio antes de seguir escribiendo
-        }
-
         document.getElementById('txt-dictado').innerText = "Detener";
         document.getElementById('btn-dictado').classList.replace('bg-amber-100', 'bg-red-100');
         document.getElementById('btn-dictado').classList.replace('text-amber-800', 'text-red-800');
@@ -899,7 +894,7 @@ function iniciarDictadoSetup() {
         let interimTranscript = '';
         let finalTranscript = '';
 
-        for (let i = 0; i < event.results.length; ++i) {
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
             if (event.results[i].isFinal) {
                 finalTranscript += event.results[i][0].transcript;
             } else {
@@ -908,10 +903,13 @@ function iniciarDictadoSetup() {
         }
 
         const textarea = document.getElementById('f-contenido');
+        
+        // Si hay un resultado final en esta corta sesión, lo agregamos al textarea
         if (finalTranscript) {
-            // Reconstruimos todo: lo que había + lo nuevo consolidado, esto evita repeticiones
-            textarea.value = textoAntesDeDictar + finalTranscript.trim();
-            // Disparar evento input para que otros scripts (si los hay) detecten el cambio
+            // Agregamos un espacio inteligente si ya hay texto
+            let currentVal = textarea.value.trim();
+            let separator = (currentVal.length > 0 && !currentVal.endsWith('.') && !currentVal.endsWith(',')) ? ' ' : (currentVal.length > 0 ? ' ' : '');
+            textarea.value = currentVal + separator + finalTranscript.trim();
             textarea.dispatchEvent(new Event('input', { bubbles: true }));
         }
         
