@@ -989,6 +989,35 @@
             return { fuente: null, puntos: [] };
         }
 
+        /* Formato compacto de puntos GPS (ver panel). Convierte el texto de Firebase en arreglo de puntos. */
+        const RUTA_FORMATO_COMPACTO = 'v1|';
+
+        function decodificarPuntosRuta(valor) {
+            if (Array.isArray(valor)) return valor;
+            if (typeof valor !== 'string' || valor.indexOf(RUTA_FORMATO_COMPACTO) !== 0) return [];
+            let pLat = 0, pLng = 0, pTs = 0;
+            const out = [];
+            for (const tok of valor.slice(RUTA_FORMATO_COMPACTO.length).split(';')) {
+                if (!tok) continue;
+                const partes = tok.split(',');
+                pLat += parseInt(partes[0], 36);
+                pLng += parseInt(partes[1], 36);
+                const p = { lat: pLat / 1e6, lng: pLng / 1e6, ts: null, accuracy: null, _h: partes[4] === '1' ? 1 : 0 };
+                if (partes[2]) { pTs += parseInt(partes[2], 36); p.ts = pTs; }
+                if (partes[3]) p.accuracy = parseInt(partes[3], 36);
+                out.push(p);
+            }
+            return out;
+        }
+
+        function decodificarRutaFirebase(rec) {
+            if (!rec || typeof rec !== 'object') return rec;
+            const out = { ...rec };
+            out.google = decodificarPuntosRuta(rec.google);
+            out.automatica = decodificarPuntosRuta(rec.automatica);
+            return out;
+        }
+
         async function cargarRutasViaje() {
             rutasViajeMap = {};
             if (!currentUsername || !currentViajeId) return;
@@ -1010,9 +1039,10 @@
                     const snap = await withTimeoutLocal(db.ref(`${currentUsername}/viajes_data/${currentViajeId}/rutas`).once('value'));
                     if (snap.exists()) {
                         snap.forEach(child => {
-                            rutasViajeMap[child.key] = child.val();
+                            const rec = decodificarRutaFirebase(child.val());
+                            rutasViajeMap[child.key] = rec;
                             // Misma clave que usa el panel (cacheManager.keyRuta).
-                            guardarCacheLocal(claveRuta(currentViajeId, child.key), child.val());
+                            guardarCacheLocal(claveRuta(currentViajeId, child.key), rec);
                         });
                         fusionarEnCacheViaje(currentViajeId, { rutas: rutasViajeMap });
                         marcarDatosFrescos();

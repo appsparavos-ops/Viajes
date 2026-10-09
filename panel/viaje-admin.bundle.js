@@ -761,13 +761,74 @@
             };
         }
 
+        /* ---- Formato compacto de puntos GPS para Firebase ----
+           Antes: cada punto era un nodo aparte (lat, lng, ts, … en cada uno).
+           Ahora: un solo texto por fuente (google / automatica) por día.
+           Cada punto va como "dLat,dLng,dTs,acc,h" separado por ";", en base 36.
+           lat/lng en millonésimas de grado (≈0,1 m); ts en ms. Se guardan diferencias
+           respecto al punto anterior, así los números son cortos. El uuid del plugin no se sube. */
+        const RUTA_FORMATO_COMPACTO = 'v1|';
+
+        function codificarPuntosRuta(puntos) {
+            if (!Array.isArray(puntos)) return RUTA_FORMATO_COMPACTO;
+            let pLat = 0, pLng = 0, pTs = 0;
+            const out = [];
+            for (const p of puntos) {
+                if (!p || p.lat == null || p.lng == null) continue;
+                const lat = Math.round(Number(p.lat) * 1e6);
+                const lng = Math.round(Number(p.lng) * 1e6);
+                if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+                const ts = Number(p.ts);
+                const hasTs = p.ts != null && Number.isFinite(ts);
+                const tsInt = hasTs ? Math.round(ts) : 0;
+                const acc = p.accuracy == null ? NaN : Number(p.accuracy);
+                out.push([
+                    (lat - pLat).toString(36),
+                    (lng - pLng).toString(36),
+                    hasTs ? (tsInt - pTs).toString(36) : '',
+                    Number.isFinite(acc) ? Math.round(acc).toString(36) : '',
+                    p._h ? '1' : ''
+                ].join(','));
+                pLat = lat; pLng = lng;
+                if (hasTs) pTs = tsInt;
+            }
+            return RUTA_FORMATO_COMPACTO + out.join(';');
+        }
+
+        function decodificarPuntosRuta(valor) {
+            if (Array.isArray(valor)) return valor;
+            if (typeof valor !== 'string' || valor.indexOf(RUTA_FORMATO_COMPACTO) !== 0) return [];
+            let pLat = 0, pLng = 0, pTs = 0;
+            const out = [];
+            for (const tok of valor.slice(RUTA_FORMATO_COMPACTO.length).split(';')) {
+                if (!tok) continue;
+                const partes = tok.split(',');
+                pLat += parseInt(partes[0], 36);
+                pLng += parseInt(partes[1], 36);
+                const p = { lat: pLat / 1e6, lng: pLng / 1e6, ts: null, accuracy: null, _h: partes[4] === '1' ? 1 : 0 };
+                if (partes[2]) { pTs += parseInt(partes[2], 36); p.ts = pTs; }
+                if (partes[3]) p.accuracy = parseInt(partes[3], 36);
+                out.push(p);
+            }
+            return out;
+        }
+
+        /* Copia de la ruta lista para subir: puntos en formato compacto, sin pendingSync. */
+        function prepararRutaParaFirebase(record) {
+            const payload = deepClone(record);
+            delete payload.pendingSync;
+            payload.google = codificarPuntosRuta(record.google);
+            payload.automatica = codificarPuntosRuta(record.automatica);
+            return payload;
+        }
+
         function normalizarRutaRecord(record, viajeId, fecha) {
             const r = record && typeof record === 'object' ? record : rutaVacia(viajeId, fecha);
             r.version = r.version || 1;
             r.viajeId = r.viajeId || viajeId;
             r.fecha = r.fecha || fecha;
-            r.google = Array.isArray(r.google) ? r.google : [];
-            r.automatica = Array.isArray(r.automatica) ? r.automatica : (Array.isArray(r.auto) ? r.auto : []);
+            r.google = decodificarPuntosRuta(r.google);
+            r.automatica = (typeof r.automatica === 'string' || Array.isArray(r.automatica)) ? decodificarPuntosRuta(r.automatica) : (Array.isArray(r.auto) ? r.auto : []);
             r.fuentePrincipal = r.fuentePrincipal === 'google' || r.fuentePrincipal === 'automatica' ? r.fuentePrincipal : null;
             r.pendingSync = !!r.pendingSync;
             return r;
@@ -1104,8 +1165,7 @@
             const pendientes = rutasPendientesLocales();
             let ok = 0;
             for (const record of pendientes) {
-                const payload = deepClone(record);
-                delete payload.pendingSync;
+                const payload = prepararRutaParaFirebase(record);
                 try {
                     await withTimeout(db.ref(`${getUserRoot()}/viajes_data/${record.viajeId}/rutas/${record.fecha}`).set(payload), TIMEOUT_MS);
                     record.pendingSync = false;
@@ -1124,10 +1184,9 @@
             const rutas = rutasLocalesDeUsuario(origenUser);
             let ok = 0;
             for (const record of rutas) {
-                const payload = deepClone(record);
-                delete payload.pendingSync;
+                const payload = prepararRutaParaFirebase(record);
                 await db.ref(`${destinoUser}/viajes_data/${record.viajeId}/rutas/${record.fecha}`).set(payload);
-                const copia = normalizarRutaRecord(payload, record.viajeId, record.fecha);
+                const copia = normalizarRutaRecord(deepClone(record), record.viajeId, record.fecha);
                 copia.pendingSync = false;
                 setRutaCache(copia, destinoUser);
                 ok++;
